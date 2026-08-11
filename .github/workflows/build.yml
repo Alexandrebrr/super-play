@@ -1,0 +1,24 @@
+name: Build Super Play
+on: [workflow_dispatch, push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if ls *.zip 1>/dev/null 2>&1; then unzip -o "*.zip"; rm -f *.zip; fi
+          ls -la
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/gradle-build-action@v2
+        with: { gradle-version: 8.4 }
+      - run: |
+          chmod +x gradlew || true
+          if [ -f gradlew ]; then ./gradlew assembleDebug bundleRelease; else gradle wrapper --gradle-version 8.4 && chmod +x gradlew && ./gradlew assembleDebug bundleRelease; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuperPlay-APK-AAB
+          path: |
+            **/build/outputs/**/*.apk
+            **/build/outputs/**/*.aab
