@@ -1,121 +1,22 @@
-name: Build Super Play
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
 
+name: build
+on: [workflow_dispatch, push]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: FORCE FIX
-        run: |
-          rm -rf app/build .gradle
-          mkdir -p app/src/main/java/com/superplay/app
-          mkdir -p app/src/main/res/layout
-          rm -f app/src/main/java/com/superplay/app/*.kt
-          cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
-          package com.superplay.app
-          import android.os.Bundle
-          import android.webkit.WebView
-          import android.webkit.WebViewClient
-          import androidx.appcompat.app.AppCompatActivity
-          class MainActivity : AppCompatActivity() {
-              private lateinit var webView: WebView
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_main)
-                  webView = findViewById(R.id.webview)
-                  webView.settings.javaScriptEnabled = true
-                  webView.webViewClient = WebViewClient()
-                  webView.loadUrl("https://google.com")
-              }
-          }
-          KT
-          cat > app/src/main/res/layout/activity_main.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent">
-              <WebView android:id="@+id/webview"
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent" />
-          </FrameLayout>
-          XML
-          cat > app/src/main/AndroidManifest.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="Super Play">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          XML
-          cat > app/build.gradle <<'GRADLE'
-          apply plugin: 'com.android.application'
-          apply plugin: 'org.jetbrains.kotlin.android'
-          android {
-              namespace 'com.superplay.app'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "com.superplay.app"
-                  minSdk 21
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              buildTypes { release { minifyEnabled false } }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-          }
-          dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          GRADLE
-          cat > build.gradle <<'GRADLE'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.4'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          GRADLE
-          echo "include ':app'" > settings.gradle
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Build APK - MOSTRA ERRO
+      - uses: android-actions/setup-android@v3
+      - name: Build APK
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.7/bin/gradle assembleDebug --stacktrace > build.log 2>&1 || true
-          echo "========== ERRO REAL =========="
-          grep -n -A 30 -B 5 "FAILED\|e: \|error:\|> Task.*FAILED\|Unresolved\|not found" build.log | head -n 300
-          echo "========== FIM ERRO =========="
-          cat build.log | tail -n 100
-          ./gradle-8.7/bin/gradle assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+          ./gradle-8.7/bin/gradle assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
         with:
           name: SuperPlay-APK
           path: app/build/outputs/apk/debug/*.apk
