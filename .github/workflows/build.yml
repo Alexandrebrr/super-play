@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v27 PREMIUM FIX DUPLICADO
+      - name: Super Play v28 PREMIUM FIX YAML
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -343,11 +343,7 @@ jobs:
               fun mostrarPreview(canal: Canal){
                   currentCanalPreview = canal
                   layoutPreview.visibility = View.VISIBLE
-                  txtEpgPreview.text = "${canal.nome}
-Grupo: ${canal.grupo}
-EPG: Agora - ${canal.nome} ao vivo
-Em breve - Programacao normal
-Logo: ${canal.logo.take(40)}"
+                  txtEpgPreview.text = canal.nome + "\nGrupo: " + canal.grupo + "\nEPG: Agora ao vivo\nEm breve: Programacao normal"
                   try{
                       val item = MediaItem.fromUri(canal.url)
                       previewPlayer?.setMediaItem(item)
@@ -361,13 +357,7 @@ Logo: ${canal.logo.take(40)}"
                   layoutLista.visibility=View.GONE
                   layoutDetalhe.visibility=View.VISIBLE
                   txtTituloFilme.text = canal.nome
-                  txtSinopse.text = "Sinopse em portugues:
-${canal.nome} - Conteudo completo dublado em portugues. Qualidade HD. Categoria ${canal.grupo}.
-
-Informacoes da lista:
-Grupo: ${canal.grupo}
-EPG ID: ${canal.epgId}
-URL: ${canal.url.take(60)}..."
+                  txtSinopse.text = "Sinopse PT: " + canal.nome + " - Dublado HD - Grupo " + canal.grupo
                   // carrega capa
                   if(canal.logo.isNotEmpty()){
                       thread{
@@ -377,8 +367,7 @@ URL: ${canal.url.take(60)}..."
                               val bmp = BitmapFactory.decodeStream(conn.inputStream)
                               runOnUiThread{ imgCapa.setImageBitmap(bmp) }
                           }catch(e:Exception){
-                              runOnUiThread{ txtSinopse.append("
-(Capa nao carregou)") }
+                              runOnUiThread{ txtSinopse.append(" (Capa nao carregou)") }
                           }
                       }
                   } else {
@@ -529,8 +518,8 @@ URL: ${canal.url.take(60)}..."
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 27
-                  versionName "27.0-PREMIUM-FIX"
+                  versionCode 28
+                  versionName "28.0-PREMIUM-FIX-YAML"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -566,9 +555,9 @@ URL: ${canal.url.take(60)}..."
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v27 PREMIUM FIX
+      - name: Build APK v28 PREMIUM FIX YAML
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v27-PREMIUM-FIX, path: "**/*.apk" }
+        with: { name: SuperPlay-v28-PREMIUM-FIX-YAML, path: "**/*.apk" }
