@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Recria projeto SEM DEPENDENCIAS
+      - name: Recria projeto COMPATIVEL JAVA 17
         run: |
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -34,8 +34,7 @@ jobs:
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
+              android:layout_width="match_parent" android:layout_height="match_parent">
               <WebView android:id="@+id/webview"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent" />
@@ -70,9 +69,11 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
-          // SEM DEPENDENCIAS - COMPILA SEMPRE
           dependencies {
           }
           GRADLE
