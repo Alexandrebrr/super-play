@@ -10,34 +10,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unzip and Prepare
+      - name: Unzip and Prepare - FORCE
         run: |
           set -x
           ls -la
-          echo "--- Procurando ZIP ---"
-          find . -maxdepth 2 -name "*.zip" -print
-          for f in *.zip; do
-            [ -e "$f" ] || continue
-            echo "Unzipping $f"
-            unzip -o "$f" -d .
-          done
-          echo "--- Depois do unzip ---"
+          # Descompacta QUALQUER zip que achar
+          find . -maxdepth 2 -name "*.zip" -exec unzip -o {} -d . \; || true
+          rm -f *.zip || true
           ls -la
-          echo "--- Procurando gradlew ---"
-          find . -type f -name "gradlew" -print
-          # Se gradlew estiver dentro de alguma subpasta, traz tudo pra raiz
-          GRADLEW_PATH=$(find . -type f -name "gradlew" | head -n 1)
-          if [ -n "$GRADLEW_PATH" ]; then
-            DIR=$(dirname "$GRADLEW_PATH")
-            echo "Projeto encontrado em: $DIR"
-            if [ "$DIR" != "." ]; then
-              cp -rf "$DIR"/* . 2>/dev/null || true
-              cp -rf "$DIR"/.* . 2>/dev/null || true
-            fi
+          # Tenta achar pasta do projeto
+          find . -maxdepth 4 -type f -name "*.kt" | head -n 20
+          # Cria estrutura padrao se nao existir
+          mkdir -p app/src/main/java/com/superplay/app
+          mkdir -p app/src/main/res/layout
+          # Move arquivos .kt que estiverem soltos
+          find . -maxdepth 3 -name "*.kt" -exec cp {} app/src/main/java/com/superplay/app/ \; || true
+          find . -maxdepth 3 -name "AndroidManifest.xml" -exec cp {} app/src/main/ \; || true
+          find . -maxdepth 3 -name "activity_main.xml" -exec cp {} app/src/main/res/layout/ \; || true
+          
+          # Cria AndroidManifest se ainda nao existe
+          if [ ! -f app/src/main/AndroidManifest.xml ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.INTERNET" /><application android:allowBackup="true" android:label="Super Play" android:theme="@android:style/Theme.NoTitleBar"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
           fi
-          ls -la
-          chmod +x gradlew || true
-          ls -la app || true
+          if [ ! -f app/src/main/res/layout/activity_main.xml ]; then
+            echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"><WebView android:id="@+id/webview" android:layout_width="match_parent" android:layout_height="match_parent" /></LinearLayout>' > app/src/main/res/layout/activity_main.xml
+          fi
+          # Cria build.gradle que FUNCIONA
+          echo 'plugins { id "com.android.application" id "org.jetbrains.kotlin.android" } android { namespace "com.superplay.app" compileSdk 34 defaultConfig { applicationId "com.superplay.app" minSdk 21 targetSdk 34 versionCode 1 versionName "1.0" } buildTypes { release { minifyEnabled false } } compileOptions { sourceCompatibility JavaVersion.VERSION_17 targetCompatibility JavaVersion.VERSION_17 } } dependencies { implementation "androidx.core:core-ktx:1.12.0" implementation "androidx.appcompat:appcompat:1.6.1" implementation "com.google.android.material:material:1.11.0" }' > app/build.gradle
+          echo "include ':app'" > settings.gradle
+          touch build.gradle
+          ls -R | head -n 100
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,8 +50,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK
+      - name: Build APK - AUTO GRADLE
         run: |
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle.zip
+          ./gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
