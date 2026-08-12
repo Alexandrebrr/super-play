@@ -12,27 +12,77 @@ jobs:
 
       - name: Fix Project Structure
         run: |
-          echo "=== Estrutura atual ==="
-          ls -la
-
-          # Cria pastas padrão do Android
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
-
-          # Move os arquivos soltos para o lugar certo (se existirem)
-          [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/ || true
-          [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/ || true
           [ -f MainActivity.kt ] && mv MainActivity.kt app/src/main/java/com/superplay/app/ || true
           [ -f Constants.kt ] && mv Constants.kt app/src/main/java/com/superplay/app/ || true
           [ -f DeviceManager.kt ] && mv DeviceManager.kt app/src/main/java/com/superplay/app/ || true
-          [ -f build.gradle ] && mv build.gradle app/build.gradle || true
+          [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/AndroidManifest.xml || true
+          [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/activity_main.xml || true
 
-          # Cria settings.gradle e build.gradle raiz se não existir
-          [! -f settings.gradle ] && echo "include ':app'" > settings.gradle || true
-          [! -f build.gradle ] && echo "" > build.gradle || true
+          # Se não tiver activity_main, cria um simples
+          if [! -f app/src/main/res/layout/activity_main.xml ]; then
+          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:orientation="vertical">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="Super Play" android:textSize="24sp" android:layout_gravity="center" />
+          </LinearLayout>
+          EOF
+          fi
 
-          echo "=== Nova estrutura ==="
-          find. -type f | head -n 50
+          # AndroidManifest garantido
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:allowBackup="true" android:label="Super Play" android:theme="@android:style/Theme.NoTitleBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.superplay.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.superplay.app"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes { release { minifyEnabled false } }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          echo "include ':app'" > settings.gradle
+          touch build.gradle
+
+          # Corrige o package do seu MainActivity.kt se estiver errado
+          sed -i 's/^package.*/package com.superplay.app/' app/src/main/java/com/superplay/app/MainActivity.kt || true
+          sed -i 's/^package.*/package com.superplay.app/' app/src/main/java/com/superplay/app/*.kt || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -43,23 +93,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK
+      - name: Build APK - SEM WRAPPER
         run: |
-          chmod +x gradlew || true
-          if [ -f gradlew ]; then
-           ./gradlew assembleDebug --stacktrace
-          else
-            curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
-            unzip -q gradle.zip
-           ./gradle-8.7/bin/gradle wrapper --gradle-version 8.7
-            chmod +x gradlew
-           ./gradlew assembleDebug --stacktrace
-          fi
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle.zip
+        ./gradle-8.7/bin/gradle :app:assembleDebug --stacktrace --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SuperPlay-APK
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            **/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
