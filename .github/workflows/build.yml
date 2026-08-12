@@ -1,4 +1,3 @@
-
 name: build
 on: [workflow_dispatch, push]
 jobs:
@@ -6,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v24 FIX LISTA SEM ERRO
+      - name: Super Play v25 FIX LISTA INDEXOF
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -159,7 +158,6 @@ jobs:
                                   if(json.optString("status")=="active"){
                                       var pl = json.optString("playlist","")
                                       if(pl.isEmpty()) pl = json.optString("url","")
-                                      pl = pl.replace("\/","/")
                                       if(pl.isNotEmpty()){
                                           lastPlaylistUrl = pl
                                           getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
@@ -172,40 +170,44 @@ jobs:
                                   } else {
                                       txtStatus.text="Nao ativo"
                                   }
-                              }catch(e:Exception){ txtStatus.text="Erro JSON ${e.message}" }
+                              }catch(e:Exception){ txtStatus.text="Erro JSON" }
                           }
-                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede ${e.message}" } }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede" } }
                   }
               }
               fun carregarM3U(link: String){
-                  txtStatusMenu.text = "Baixando..."
+                  txtStatusMenu.text = "Baixando lista..."
                   thread{
                       try{
                           val conn = URL(link).openConnection() as HttpURLConnection
                           conn.connectTimeout=20000; conn.readTimeout=40000
-                          conn.setRequestProperty("User-Agent","VLC/3.0.20")
-                          val code = conn.responseCode
-                          if(code!=200) throw Exception("HTTP $code")
+                          conn.setRequestProperty("User-Agent","VLC")
                           val txt = conn.inputStream.bufferedReader().use{it.readText()}
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
-                          var nome="Canal"; var grupo="Sem Categoria"
+                          var nome="Canal"
+                          var grupo="Sem Categoria"
                           var total=0
                           for(raw in txt.lines()){
                               val line=raw.trim()
                               if(line.isEmpty()) continue
                               if(line.startsWith("#EXTINF")){
                                   nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal"
-                                  val p1 = line.indexOf("group-title="")
-                                  if(p1!=-1){
-                                      val p2 = line.indexOf(""", p1+13)
-                                      if(p2!=-1){
-                                          grupo = line.substring(p1+13, p2)
-                                      }
-                                  } else {
-                                      val q1 = line.indexOf("group-title='")
-                                      if(q1!=-1){
-                                          val q2 = line.indexOf("'", q1+13)
-                                          if(q2!=-1) grupo = line.substring(q1+13, q2)
+                                  val gtIndex = line.indexOf("group-title=")
+                                  if(gtIndex!=-1){
+                                      var start = gtIndex + 12
+                                      if(start < line.length){
+                                          val firstChar = line[start]
+                                          if(firstChar == '"' || firstChar == '\''){
+                                              val quote = firstChar
+                                              start++
+                                              val end = line.indexOf(quote, start)
+                                              if(end!=-1){
+                                                  grupo = line.substring(start, end)
+                                              }
+                                          } else {
+                                              val end = line.indexOf(' ', start)
+                                              if(end!=-1) grupo = line.substring(start, end) else grupo = line.substring(start)
+                                          }
                                       }
                                   }
                               } else if(line.startsWith("http")){
@@ -221,7 +223,8 @@ jobs:
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   if(!mapa.containsKey(grupo)) mapa[grupo]=mutableListOf()
                                   mapa[grupo]?.add(canal)
-                                  nome="Canal"; grupo="Sem Categoria"
+                                  nome="Canal"
+                                  grupo="Sem Categoria"
                               }
                           }
                           runOnUiThread{
@@ -229,7 +232,7 @@ jobs:
                               val mc = moviesGrupos.values.sumOf{it.size}
                               val sc = seriesGrupos.values.sumOf{it.size}
                               txtStatusMenu.text="OK LIVE:$lc FIL:$mc SER:$sc TOTAL:$total"
-                              Toast.makeText(this, "Carregado $total", Toast.LENGTH_LONG).show()
+                              Toast.makeText(this, "Carregado $total canais", Toast.LENGTH_LONG).show()
                               if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
                           }
                       }catch(e:Exception){
@@ -355,8 +358,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 24
-                  versionName "24.0-FIX-COMPILACAO"
+                  versionCode 25
+                  versionName "25.0-FIX-INDEXOF"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -392,9 +395,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v24 FIX
+      - name: Build APK v25
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v24-FIX-COMPILACAO, path: "**/*.apk" }
+        with: { name: SuperPlay-v25-FIX-LISTA, path: "**/*.apk" }
