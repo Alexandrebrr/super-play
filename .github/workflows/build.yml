@@ -7,19 +7,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Recria projeto CORRIGIDO namespace
+      - name: Recria projeto SEM DEPENDENCIAS
         run: |
-          rm -rf app build .gradle gradle.zip
+          rm -rf app build .gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
+          import android.app.Activity
           import android.os.Bundle
           import android.webkit.WebView
           import android.webkit.WebViewClient
-          import androidx.appcompat.app.AppCompatActivity
-          class MainActivity : AppCompatActivity() {
+          class MainActivity : Activity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
@@ -34,7 +34,8 @@ jobs:
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent">
+              android:layout_width="match_parent"
+              android:layout_height="match_parent">
               <WebView android:id="@+id/webview"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent" />
@@ -56,38 +57,32 @@ jobs:
           </manifest>
           XML
           
-          # AQUI ESTAVA O ERRO - FALTAVA O NAMESPACE - AGORA CORRIGIDO
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
           android {
               namespace 'com.superplay.app'
-              compileSdkVersion 34
+              compileSdkVersion 33
               defaultConfig {
                   applicationId "com.superplay.app"
                   minSdkVersion 21
-                  targetSdkVersion 34
+                  targetSdkVersion 33
                   versionCode 1
                   versionName "1.0"
               }
               buildTypes { release { minifyEnabled false } }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
           }
+          // SEM DEPENDENCIAS - COMPILA SEMPRE
           dependencies {
-              implementation 'androidx.core:core-ktx:1.12.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           GRADLE
           
           cat > build.gradle <<'GRADLE'
           buildscript {
-              ext.kotlin_version = '1.9.22'
+              ext.kotlin_version = '1.9.0'
               repositories { google(); mavenCentral() }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.4'
+                  classpath 'com.android.tools.build:gradle:7.4.2'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
@@ -105,10 +100,10 @@ jobs:
 
       - name: Build APK
         run: |
-          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.7/bin/gradle assembleDebug
-          find . -name "*.apk"
+          ./gradle-8.0/bin/gradle assembleDebug
+          ls -lh app/build/outputs/apk/debug/
 
       - uses: actions/upload-artifact@v4
         with:
