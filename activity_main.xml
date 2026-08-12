@@ -1,0 +1,14 @@
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center" android:background="#0a0a0a" android:padding="40dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textSize="42sp" android:textStyle="bold" android:textColor="#00ff88"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Seu player de mídia avançado" android:textColor="#888" android:layout_marginTop="8dp"/>
+    <TextView android:id="@+id/txtIdLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ID DO SEU APARELHO:" android:textColor="#fff" android:layout_marginTop="40dp" android:letterSpacing="0.1"/>
+    <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="GERANDO..." android:textSize="38sp" android:textStyle="bold" android:textColor="#fff" android:layout_marginTop="10dp" android:background="#1a1a1a" android:padding="15dp"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ative em:" android:textColor="#888" android:layout_marginTop="30dp"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="supplay.online/ativar" android:textSize="22sp" android:textColor="#00ff88" android:textStyle="bold"/>
+    <Button android:id="@+id/btnCheck" android:layout_width="320dp" android:layout_height="60dp" android:text="JÁ ATIVEI, VERIFICAR" android:layout_marginTop="40dp" android:backgroundTint="#00ff88"/>
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Plano anual R$25 - Ativação externa" android:textSize="12sp" android:textColor="#555" android:layout_marginTop="20dp"/>
+</LinearLayout>
