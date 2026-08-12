@@ -5,18 +5,78 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Super Play EXOPLAYER com Categorias
+      - name: Super Play v8 com Icone e Fundo
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+
+          # --- GERA ICONE E FUNDO COM PYTHON (SEM BASE64) ---
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          import random, math, os
+          # ICONE 512
+          size=512
+          im=Image.new("RGBA",(size,size),(5,14,42,255))
+          draw=ImageDraw.Draw(im)
+          # borda neon cyan
+          for i in range(8):
+              r=size//2 - i
+              draw.rounded_rectangle([(i,i),(size-i,size-i)], radius=90-i, outline=(0,255,200, int(255*(1-i/8))), width=2)
+          # TV branca
+          tv_x0, tv_y0 = 90, 140
+          tv_x1, tv_y1 = 422, 380
+          draw.rounded_rectangle([(tv_x0,tv_y0),(tv_x1,tv_y1)], radius=30, outline=(255,255,255,255), width=28)
+          # base TV
+          draw.polygon([(160,380),(352,380),(340,420),(172,420)], fill=(255,255,255,255))
+          # play verde neon
+          cx, cy = 270, 260
+          play = [(210,190),(210,330),(340,260)]
+          draw.polygon(play, fill=(0,0,0,0), outline=(0,255,136,255), width=8)
+          # glow verde
+          for s in range(6,0,-1):
+              draw.polygon(play, outline=(0,255,136, int(40*s)), width=s)
+          im.save("icon.png")
+          # copia para mipmap
+          for d in ["app/src/main/res/mipmap-xxxhdpi","app/src/main/res/mipmap-xxhdpi","app/src/main/res/mipmap-xhdpi","app/src/main/res/mipmap-hdpi","app/src/main/res/mipmap-mdpi","app/src/main/res/drawable"]:
+              os.makedirs(d, exist_ok=True)
+              im.resize((192,192) if "xxx" in d else (144,144) if "xx" in d else (96,96) if "xhdpi" in d and "xx" not in d else (72,72) if "hdpi" in d else (48,48) if "mdpi" in d else (512,512)).save(f"{d}/ic_launcher.png")
+          print("icone gerado")
+          # FUNDO ESTRELAS
+          W,H=1280,720
+          bg=Image.new("RGB",(W,H),(7,15,42))
+          d=ImageDraw.Draw(bg)
+          # estrelas
+          for _ in range(400):
+              x=random.randint(0,W); y=random.randint(0,H)
+              b=random.randint(150,255)
+              s=random.randint(1,2)
+              d.ellipse([(x,y),(x+s,y+s)], fill=(b,b,255))
+          # cometas
+          for _ in range(4):
+              x0=random.randint(0,W); y0=random.randint(0,H//2)
+              x1=x0+random.randint(200,400); y1=y0+random.randint(100,300)
+              for i in range(30):
+                  t=i/30
+                  x=int(x0+(x1-x0)*t); y=int(y0+(y1-y0)*t)
+                  a=int(255*(1-t))
+                  d.ellipse([(x,y),(x+3,y+3)], fill=(0,200,255,a))
+          bg.save("app/src/main/res/drawable/bg_space.jpg","JPEG", quality=85)
+          print("fundo gerado")
+          PY
 
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.app.Activity
           import android.os.Bundle
           import android.widget.*
+          import android.view.View
           import android.content.ClipboardManager
           import android.content.Context
           import java.net.URL
@@ -26,37 +86,41 @@ jobs:
           import androidx.media3.exoplayer.ExoPlayer
           import androidx.media3.common.MediaItem
           import androidx.media3.ui.PlayerView
-
+          data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String)
           class MainActivity : Activity() {
-              private var deviceId: String = ""
+              private var deviceId = ""
+              private var exoPlayer: ExoPlayer? = null
               private lateinit var txtId: TextView
               private lateinit var txtStatus: TextView
-              private lateinit var btnVerificar: Button
-              private lateinit var listCanais: ListView
+              private lateinit var layoutAtivacao: LinearLayout
+              private lateinit var layoutMenu: LinearLayout
+              private lateinit var layoutLista: LinearLayout
+              private lateinit var layoutPlayer: LinearLayout
+              private lateinit var txtTituloLista: TextView
+              private lateinit var listView: ListView
               private lateinit var playerView: PlayerView
-              private var exoPlayer: ExoPlayer? = null
-              private var allCanais = mutableListOf<Triple<String,String,String>>() // nome, url, categoria
-              private var liveList = mutableListOf<Pair<String,String>>()
-              private var moviesList = mutableListOf<Pair<String,String>>()
-              private var seriesList = mutableListOf<Pair<String,String>>()
-              private var currentCategory = "LIVE"
-
+              private var todosCanais = mutableListOf<Canal>()
+              private var liveGrupos = mutableMapOf<String, MutableList<Canal>>()
+              private var moviesGrupos = mutableMapOf<String, MutableList<Canal>>()
+              private var seriesGrupos = mutableMapOf<String, MutableList<Canal>>()
+              private var navStack = mutableListOf<String>()
+              private var currentGruposKeys = listOf<String>()
+              private var currentGrupoSelecionado = ""
+              private var currentTipo = "LIVE"
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
                   txtId = findViewById(R.id.txtId)
                   txtStatus = findViewById(R.id.txtStatus)
-                  btnVerificar = findViewById(R.id.btnVerificar)
-                  listCanais = findViewById(R.id.listCanais)
+                  layoutAtivacao = findViewById(R.id.layoutAtivacao)
+                  layoutMenu = findViewById(R.id.layoutMenu)
+                  layoutLista = findViewById(R.id.layoutLista)
+                  layoutPlayer = findViewById(R.id.layoutPlayer)
+                  txtTituloLista = findViewById(R.id.txtTituloLista)
+                  listView = findViewById(R.id.listView)
                   playerView = findViewById(R.id.playerView)
-                  val btnCopiar = findViewById<Button>(R.id.btnCopiar)
-                  val btnLive = findViewById<Button>(R.id.btnLive)
-                  val btnMovies = findViewById<Button>(R.id.btnMovies)
-                  val btnSeries = findViewById<Button>(R.id.btnSeries)
-
                   exoPlayer = ExoPlayer.Builder(this).build()
                   playerView.player = exoPlayer
-
                   val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
                   var id = prefs.getString("device_id", null)
                   if (id == null) {
@@ -68,188 +132,229 @@ jobs:
                   }
                   deviceId = id!!
                   txtId.text = deviceId
-
-                  btnCopiar.setOnClickListener {
+                  findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                      clip.setPrimaryClip(android.content.ClipData.newPlainText("ID TV", deviceId))
-                      Toast.makeText(this, "ID copiado", Toast.LENGTH_SHORT).show()
+                      clip.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
+                      Toast.makeText(this, "ID $deviceId copiado", Toast.LENGTH_SHORT).show()
                   }
-                  btnVerificar.setOnClickListener { verificarAtivacao() }
-                  btnLive.setOnClickListener { showCategory("LIVE") }
-                  btnMovies.setOnClickListener { showCategory("MOVIES") }
-                  btnSeries.setOnClickListener { showCategory("SERIES") }
-
-                  listCanais.setOnItemClickListener { _, _, pos, _ ->
-                      val lista = when(currentCategory){
-                          "MOVIES" -> moviesList
-                          "SERIES" -> seriesList
-                          else -> liveList
+                  findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificarAtivacao() }
+                  findViewById<Button>(R.id.btnCanais).setOnClickListener { abrirCategorias("LIVE") }
+                  findViewById<Button>(R.id.btnFilmes).setOnClickListener { abrirCategorias("MOVIES") }
+                  findViewById<Button>(R.id.btnSeries).setOnClickListener { abrirCategorias("SERIES") }
+                  findViewById<Button>(R.id.btnJogos).setOnClickListener { Toast.makeText(this,"Jogos em breve",Toast.LENGTH_SHORT).show() }
+                  findViewById<Button>(R.id.btnListas).setOnClickListener { abrirCategorias("LIVE") }
+                  findViewById<Button>(R.id.btnAjustes).setOnClickListener { abrirAjustes() }
+                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { verificarAtivacao() }
+                  findViewById<Button>(R.id.btnSair).setOnClickListener { finish() }
+                  findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
+                  findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { voltar() }
+                  listView.setOnItemClickListener { _, _, pos, _ ->
+                      if (txtTituloLista.text.contains("Categoria") || txtTituloLista.text.contains("Ajustes")) {
+                          if(currentTipo=="AJUSTES") return@setOnItemClickListener
+                          val grupoNome = currentGruposKeys[pos]
+                          abrirCanaisDoGrupo(grupoNome)
+                      } else {
+                          val canal = getCanaisAtuais()[pos]
+                          playUrl(canal.nome, canal.url)
                       }
-                      if (pos < lista.size) {
-                          val (nome, url) = lista[pos]
-                          txtStatus.text = "Tocando: $nome"
-                          playUrl(url)
-                      }
                   }
-                  txtStatus.text = "ID $deviceId - Ative em supplay.online"
+                  val savedPlaylist = prefs.getString("playlist_url", null)
+                  if (savedPlaylist != null) { carregarM3U(savedPlaylist) }
               }
-
-              fun showCategory(cat: String){
-                  currentCategory = cat
-                  val lista = when(cat){
-                      "MOVIES" -> moviesList
-                      "SERIES" -> seriesList
-                      else -> liveList
-                  }
-                  if(lista.isEmpty()){
-                      txtStatus.text = "Nenhum ${cat} - Verifique ativacao"
-                      listCanais.adapter = null
-                  } else {
-                      txtStatus.text = "${lista.size} em ${cat} - Toque para assistir"
-                      val nomes = lista.map { it.first }
-                      listCanais.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, nomes)
-                  }
-              }
-
-              fun playUrl(url: String){
-                  try{
-                      val mediaItem = MediaItem.fromUri(url)
-                      exoPlayer?.setMediaItem(mediaItem)
-                      exoPlayer?.prepare()
-                      exoPlayer?.playWhenReady = true
-                  }catch(e: Exception){
-                      Toast.makeText(this, "Erro player: ${e.message}", Toast.LENGTH_SHORT).show()
-                  }
-              }
-
-              fun verificarAtivacao() {
+              fun verificarAtivacao(){
                   txtStatus.text = "Verificando $deviceId..."
-                  btnVerificar.isEnabled = false
-                  thread {
-                      try {
-                          val fullUrl = "https://supplay.online/api/check.php?device_id=" + deviceId
-                          val conn = URL(fullUrl).openConnection() as HttpURLConnection
-                          conn.connectTimeout = 10000
-                          conn.readTimeout = 10000
-                          val resp = try { conn.inputStream.bufferedReader().use { it.readText() } } catch (e: Exception) { conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "" }
-                          runOnUiThread {
-                              try {
+                  thread{
+                      try{
+                          val url = "https://supplay.online/api/check.php?device_id=$deviceId"
+                          val conn = URL(url).openConnection() as HttpURLConnection
+                          conn.connectTimeout=10000; conn.readTimeout=10000
+                          val resp = conn.inputStream.bufferedReader().use{it.readText()}
+                          runOnUiThread{
+                              try{
                                   val json = JSONObject(resp)
-                                  if (json.optString("status") == "active") {
+                                  if(json.optString("status")=="active"){
                                       val playlist = json.optString("playlist").replace("\\/", "/")
-                                      if (playlist.startsWith("http")) {
-                                          txtStatus.text = "Ativo! Baixando canais..."
-                                          carregarM3U(playlist)
-                                      } else {
-                                          txtStatus.text = "Playlist invalida"
-                                          btnVerificar.isEnabled = true
-                                      }
-                                  } else {
-                                      txtStatus.text = "Nao ativado. ID $deviceId"
-                                      btnVerificar.isEnabled = true
-                                  }
-                              } catch (e: Exception) {
-                                  txtStatus.text = "Nao ativado"
-                                  btnVerificar.isEnabled = true
-                              }
+                                      getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", playlist).apply()
+                                      txtStatus.text="Ativo! Baixando grade..."
+                                      carregarM3U(playlist)
+                                  } else { txtStatus.text="Nao ativado ID $deviceId" }
+                              }catch(e:Exception){ txtStatus.text="Erro JSON" }
                           }
-                      } catch (e: Exception) {
-                          runOnUiThread { txtStatus.text = "Erro rede: ${e.message}"; btnVerificar.isEnabled = true }
-                      }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede: ${e.message}" } }
                   }
               }
-
-              fun carregarM3U(linkM3U: String) {
-                  thread {
-                      try {
-                          val conn = URL(linkM3U).openConnection() as HttpURLConnection
-                          conn.setRequestProperty("User-Agent", "VLC/3.0")
-                          conn.connectTimeout = 20000
-                          conn.readTimeout = 20000
-                          val conteudo = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                          allCanais.clear(); liveList.clear(); moviesList.clear(); seriesList.clear()
-                          val linhas = conteudo.lines()
-                          var nomeAtual = ""
-                          var groupAtual = ""
-                          for (linha in linhas) {
-                              val l = linha.trim()
-                              if (l.startsWith("#EXTINF")) {
-                                  nomeAtual = if (l.contains(",")) l.substringAfterLast(",").trim() else "Canal"
-                                  val groupMatch = Regex("group-title=\"([^\"]+)\"").find(l)
-                                  groupAtual = groupMatch?.groupValues?.get(1) ?: ""
-                              } else if (l.isNotEmpty() && !l.startsWith("#") && l.startsWith("http")) {
-                                  if (nomeAtual.isEmpty()) nomeAtual = "Canal"
-                                  val cat = when {
-                                      l.contains("/movie/") || groupAtual.lowercase().contains("filme") || groupAtual.lowercase().contains("movie") || groupAtual.lowercase().contains("vod") -> "MOVIES"
-                                      l.contains("/series/") || groupAtual.lowercase().contains("serie") || groupAtual.lowercase().contains("novela") -> "SERIES"
+              fun carregarM3U(link: String){
+                  thread{
+                      try{
+                          val conn = URL(link).openConnection() as HttpURLConnection
+                          conn.setRequestProperty("User-Agent","VLC/3.0")
+                          conn.connectTimeout=20000; conn.readTimeout=20000
+                          val conteudo = conn.inputStream.bufferedReader(Charsets.UTF_8).use{it.readText()}
+                          todosCanais.clear(); liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
+                          var nomeAtual=""; var grupoAtual=""
+                          for(linhaRaw in conteudo.lines()){
+                              val l = linhaRaw.trim()
+                              if(l.startsWith("#EXTINF")){
+                                  nomeAtual = if(l.contains(",")) l.substringAfterLast(",").trim() else "Canal"
+                                  val g = Regex("group-title=\"([^\"]+)\"").find(l)
+                                  grupoAtual = g?.groupValues?.get(1) ?: "Sem Categoria"
+                              } else if(l.isNotEmpty() && !l.startsWith("#") && l.startsWith("http")){
+                                  if(nomeAtual.isEmpty()) nomeAtual="Canal"
+                                  val tipo = when{
+                                      l.contains("/movie/",true) || grupoAtual.lowercase().contains("filme") || grupoAtual.lowercase().contains("movie") -> "MOVIES"
+                                      l.contains("/series/",true) || grupoAtual.lowercase().contains("serie") -> "SERIES"
                                       else -> "LIVE"
                                   }
-                                  allCanais.add(Triple(nomeAtual, l, cat))
-                                  when(cat){
-                                      "MOVIES" -> moviesList.add(Pair(nomeAtual,l))
-                                      "SERIES" -> seriesList.add(Pair(nomeAtual,l))
-                                      else -> liveList.add(Pair(nomeAtual,l))
-                                  }
-                                  nomeAtual=""; groupAtual=""
+                                  val canal = Canal(nomeAtual,l,grupoAtual,tipo)
+                                  todosCanais.add(canal)
+                                  val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                                  if(!mapa.containsKey(grupoAtual)) mapa[grupoAtual]=mutableListOf()
+                                  mapa[grupoAtual]?.add(canal)
+                                  nomeAtual=""; grupoAtual=""
                               }
                           }
-                          runOnUiThread {
-                              txtStatus.text = "LIVE:${liveList.size} FILMES:${moviesList.size} SERIES:${seriesList.size}"
-                              showCategory("LIVE")
-                              btnVerificar.isEnabled = true
-                              Toast.makeText(this, "Carregado ${allCanais.size} canais", Toast.LENGTH_LONG).show()
+                          runOnUiThread{
+                              layoutAtivacao.visibility=View.GONE
+                              layoutMenu.visibility=View.VISIBLE
+                              txtStatus.text="LIVE:${liveGrupos.size} FILMES:${moviesGrupos.size} SERIES:${seriesGrupos.size}"
                           }
-                      } catch (e: Exception) {
-                          runOnUiThread { txtStatus.text = "Erro M3U: ${e.message}"; btnVerificar.isEnabled = true }
-                      }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro M3U: ${e.message}" } }
                   }
               }
-
-              override fun onDestroy() {
-                  super.onDestroy()
-                  exoPlayer?.release()
+              fun abrirCategorias(tipo: String){
+                  currentTipo=tipo
+                  val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                  if(mapa.isEmpty()){ Toast.makeText(this,"Vazio $tipo",Toast.LENGTH_SHORT).show(); return }
+                  currentGruposKeys = mapa.keys.sorted()
+                  txtTituloLista.text = when(tipo){"MOVIES"->"Categorias Filmes";"SERIES"->"Categorias Series";else->"Categorias Ao Vivo"}
+                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
+                  layoutMenu.visibility=View.GONE
+                  layoutLista.visibility=View.VISIBLE
+                  navStack.add("MENU")
               }
+              fun abrirCanaisDoGrupo(grupo: String){
+                  currentGrupoSelecionado=grupo
+                  val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                  val canais = mapa[grupo] ?: mutableListOf()
+                  txtTituloLista.text = "$grupo - ${canais.size}"
+                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, canais.map{it.nome})
+                  navStack.add("CAT:$grupo")
+              }
+              fun getCanaisAtuais(): List<Canal>{
+                  val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                  return mapa[currentGrupoSelecionado] ?: emptyList()
+              }
+              fun playUrl(nome: String, url: String){
+                  layoutLista.visibility=View.GONE
+                  layoutPlayer.visibility=View.VISIBLE
+                  findViewById<TextView>(R.id.txtTocando).text="Tocando: $nome"
+                  navStack.add("CANAL")
+                  try{
+                      val item = MediaItem.fromUri(url)
+                      exoPlayer?.setMediaItem(item)
+                      exoPlayer?.prepare()
+                      exoPlayer?.playWhenReady=true
+                  }catch(e:Exception){ Toast.makeText(this,"Erro: ${e.message}",Toast.LENGTH_SHORT).show() }
+              }
+              fun abrirAjustes(){
+                  currentTipo="AJUSTES"
+                  currentGruposKeys = listOf("Controle dos pais","Ocultar categorias ao vivo","Ocultar categorias Vod","Ocultar categorias series","Limpar historico","Atualizar agora")
+                  txtTituloLista.text="Ajustes"
+                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
+                  layoutMenu.visibility=View.GONE
+                  layoutLista.visibility=View.VISIBLE
+                  navStack.add("MENU")
+              }
+              fun voltar(){
+                  if(layoutPlayer.visibility==View.VISIBLE){
+                      exoPlayer?.stop()
+                      layoutPlayer.visibility=View.GONE
+                      layoutLista.visibility=View.VISIBLE
+                      if(navStack.isNotEmpty()) navStack.removeAt(navStack.size-1)
+                      return
+                  }
+                  if(layoutLista.visibility==View.VISIBLE){
+                      if(navStack.isNotEmpty()){
+                          val last = navStack.removeAt(navStack.size-1)
+                          if(last.startsWith("CAT:")){ abrirCategorias(currentTipo); navStack.removeAt(navStack.size-1); return }
+                      }
+                      layoutLista.visibility=View.GONE
+                      layoutMenu.visibility=View.VISIBLE
+                      return
+                  }
+              }
+              override fun onBackPressed() { if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() else super.onBackPressed() }
+              override fun onDestroy() { super.onDestroy(); exoPlayer?.release() }
           }
           KT
 
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:background="#0A0A0A">
-              <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="#1C1C1E" android:padding="10dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play" android:textColor="#FFF" android:textSize="18sp" android:textStyle="bold" android:gravity="center"/>
-                  <TextView android:id="@+id/txtId" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="A1B2-C3D4" android:textColor="#00FF88" android:textSize="26sp" android:textStyle="bold" android:gravity="center"/>
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="www.supplay.online/ativar" android:textColor="#AAA" android:textSize="10sp" android:gravity="center" android:layout_marginBottom="6dp"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                      <Button android:id="@+id/btnCopiar" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="COPIAR ID" android:textSize="10sp" android:layout_marginEnd="4dp"/>
-                      <Button android:id="@+id/btnVerificar" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="VERIFICAR" android:textSize="10sp" android:backgroundTint="#00FF88" android:textColor="#000"/>
-                  </LinearLayout>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="6dp">
-                      <Button android:id="@+id/btnLive" android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:text="AO VIVO" android:textSize="10sp" android:backgroundTint="#2C2C2E" android:layout_marginEnd="2dp"/>
-                      <Button android:id="@+id/btnMovies" android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:text="FILMES" android:textSize="10sp" android:backgroundTint="#2C2C2E" android:layout_marginEnd="2dp"/>
-                      <Button android:id="@+id/btnSeries" android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:text="SÉRIES" android:textSize="10sp" android:backgroundTint="#2C2C2E"/>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="@drawable/bg_space">
+              <LinearLayout android:id="@+id/layoutAtivacao"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:orientation="vertical" android:gravity="center" android:padding="24dp">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textColor="#FFF" android:textSize="28sp" android:textStyle="bold"/>
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ID DA SUA TV" android:textColor="#888" android:textSize="11sp" android:layout_marginTop="20dp"/>
+                  <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX-XXXX" android:textColor="#00FF88" android:textSize="36sp" android:textStyle="bold"/>
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="www.supplay.online/ativar" android:textColor="#FFF" android:textSize="14sp" android:textStyle="bold" android:layout_marginBottom="16dp"/>
+                  <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="48dp" android:text="COPIAR ID"/>
+                  <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="52dp" android:text="VERIFICAR" android:backgroundTint="#00FF88" android:textColor="#000" android:layout_marginTop="8dp"/>
+                  <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aguardando..." android:textColor="#888" android:textSize="11sp" android:gravity="center" android:layout_marginTop="12dp"/>
+              </LinearLayout>
+              <LinearLayout android:id="@+id/layoutMenu"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:orientation="vertical" android:visibility="gone" android:padding="16dp">
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v8" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center" android:layout_marginTop="20dp">
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical">
+                          <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="📺&#10;Canais" android:textSize="18sp" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
+                          <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+                              <Button android:id="@+id/btnJogos" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="⚽&#10;JOGOS" android:textSize="11sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
+                              <Button android:id="@+id/btnListas" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="👥&#10;Listas" android:textSize="11sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
+                          </LinearLayout>
+                      </LinearLayout>
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+                          <Button android:id="@+id/btnFilmes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="▶&#10;Filmes" android:textSize="12sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
+                          <Button android:id="@+id/btnSeries" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="🎬&#10;Series" android:textSize="12sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
+                      </LinearLayout>
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+                          <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⚙ Ajustes" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
+                          <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="↻ Atualizar" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
+                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⇦ Sair" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
+                      </LinearLayout>
                   </LinearLayout>
               </LinearLayout>
-              <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="IDLE" android:textColor="#888" android:textSize="10sp" android:gravity="center" android:padding="4dp"/>
-              <androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:background="#000"/>
-              <ListView android:id="@+id/listCanais" android:layout_width="match_parent" android:layout_height="140dp" android:background="#151515"/>
-          </LinearLayout>
+              <LinearLayout android:id="@+id/layoutLista"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:orientation="vertical" android:visibility="gone" android:background="#0A1931" android:padding="8dp">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                      <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="◀ Voltar"/>
+                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:textSize="16sp" android:textStyle="bold" android:gravity="center"/>
+                  </LinearLayout>
+                  <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0F2240" android:divider="#1A3A6A" android:dividerHeight="1dp" android:layout_marginTop="8dp"/>
+              </LinearLayout>
+              <LinearLayout android:id="@+id/layoutPlayer"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:orientation="vertical" android:visibility="gone" android:background="#000">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
+                      <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="◀ Voltar"/>
+                      <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando..." android:textColor="#FFF" android:textSize="12sp" android:gravity="center"/>
+                  </LinearLayout>
+                  <androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+              </LinearLayout>
+          </FrameLayout>
           XML
 
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <application android:allowBackup="true" android:label="Super Play" android:usesCleartextTraffic="true">
+              <application android:allowBackup="true" android:label="Super Play" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:configChanges="orientation|keyboardHidden|screenSize">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
+                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>
@@ -261,18 +366,9 @@ jobs:
           android {
               namespace 'com.superplay.app'
               compileSdkVersion 34
-              defaultConfig {
-                  applicationId "com.superplay.app"
-                  minSdkVersion 24
-                  targetSdkVersion 34
-                  versionCode 6
-                  versionName "6.0-EXOPLAYER-CATEGORIAS"
-              }
+              defaultConfig { applicationId "com.superplay.app" minSdkVersion 24 targetSdkVersion 34 versionCode 8 versionName "8.0-ICON-FUNDO" }
               buildTypes { release { minifyEnabled false } }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
               kotlinOptions { jvmTarget = '17' }
           }
           dependencies {
@@ -286,10 +382,7 @@ jobs:
           buildscript {
               ext.kotlin_version = '1.9.0'
               repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
           }
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
@@ -298,20 +391,14 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
+        with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
-
-      - name: Build APK EXOPLAYER
+      - name: Build APK v8
         run: |
+          pip3 install pillow -q
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q gradle.zip
           ./gradle-8.2/bin/gradle assembleDebug --stacktrace
           find . -name "*.apk" -type f -ls
-
       - uses: actions/upload-artifact@v4
-        with:
-          name: SuperPlay-EXOPLAYER-CATEGORIAS
-          path: "**/*.apk"
+        with: { name: SuperPlay-v8-ICON-FUNDO, path: "**/*.apk" }
