@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Recria Super Play OFICIAL sem appcompat - GARANTIDO VERDE
+      - name: Super Play OFICIAL ZERO DEPS - supplay.online
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
@@ -35,8 +35,7 @@ jobs:
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
+              android:layout_width="match_parent" android:layout_height="match_parent"
               android:background="#000000">
               <WebView android:id="@+id/webview"
                   android:layout_width="match_parent"
@@ -80,7 +79,6 @@ jobs:
               kotlinOptions { jvmTarget = '17' }
           }
           dependencies {
-              implementation 'androidx.core:core:1.9.0'
           }
           GRADLE
 
@@ -110,8 +108,8 @@ jobs:
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.0/bin/gradle assembleDebug
-          find . -name "*.apk" -type f
+          ./gradle-8.0/bin/gradle assembleDebug --stacktrace
+          find . -name "*.apk" -type f -ls
 
       - uses: actions/upload-artifact@v4
         with:
