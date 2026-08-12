@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v19 MEDIA3 FIX CURL
+      - name: Super Play v20 FIX APPCOMPAT
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
@@ -16,10 +16,9 @@ jobs:
           cat > app/src/main/res/drawable/ic_launcher.xml <<'XML'
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="512dp" android:height="512dp" android:viewportWidth="512" android:viewportHeight="512">
             <path android:fillColor="#050E2A" android:pathData="M0,0h512v512h-512z"/>
-            <path android:strokeColor="#00FFC8" android:strokeWidth="10" android:pathData="M45,45h422a45,45 0 0 1 45,45v332a45,45 0 0 1 -45,45h-422a45,45 0 0 1 -45,-45v-332a45,45 0 0 1 45,-45z"/>
-            <path android:fillColor="#FFFFFF" android:pathData="M100,150h312a30,30 0 0 1 30,30v150a30,30 0 0 1 -30,30h-312a30,30 0 0 1 -30,-30v-150a30,30 0 0 1 30,-30z"/>
-            <path android:fillColor="#FFFFFF" android:pathData="M170,380l172,0l-12,38h-148z"/>
-            <path android:fillColor="#00FF88" android:pathData="M215,195l0,120l100,-60z"/>
+            <path android:strokeColor="#00FFC8" android:strokeWidth="12" android:pathData="M40,40h432v432h-432z"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M100,150h312v180h-312z"/>
+            <path android:fillColor="#00FF88" android:pathData="M215,190l0,120l100,-60z"/>
           </vector>
           XML
 
@@ -28,6 +27,11 @@ jobs:
             <gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/>
           </shape>
           XML
+
+          cat > gradle.properties <<'PROP'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          PROP
 
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
@@ -91,7 +95,7 @@ jobs:
                   findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       clip.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
-                      Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this, "Copiado $deviceId", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificarAtivacao() }
                   findViewById<Button>(R.id.btnCanais).setOnClickListener { abrirCategorias("LIVE") }
@@ -107,7 +111,8 @@ jobs:
                           if(currentTipo=="AJUSTES") return@setOnItemClickListener
                           abrirCanaisDoGrupo(currentGruposKeys[pos])
                       } else {
-                          playUrl(getCanaisAtuais()[pos])
+                          val lista = getCanaisAtuais()
+                          if(pos < lista.size) playUrl(lista[pos])
                       }
                   }
                   prefs.getString("playlist_url", null)?.let { carregarM3U(it) }
@@ -117,16 +122,20 @@ jobs:
                   thread{
                       try{
                           val conn = URL("https://supplay.online/api/check.php?device_id=$deviceId").openConnection() as HttpURLConnection
+                          conn.connectTimeout=15000; conn.readTimeout=15000
                           val resp = conn.inputStream.bufferedReader().use{it.readText()}
                           runOnUiThread{
-                              val json = JSONObject(resp)
-                              if(json.optString("status")=="active"){
-                                  val pl = json.optString("playlist").replace("\\/", "/")
-                                  getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
-                                  carregarM3U(pl)
-                              } else txtStatus.text="Nao ativo"
+                              try{
+                                  val json = JSONObject(resp)
+                                  if(json.optString("status")=="active"){
+                                      val pl = json.optString("playlist").replace("\\/", "/")
+                                      getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
+                                      txtStatus.text="Ativo!"
+                                      carregarM3U(pl)
+                                  } else txtStatus.text="Nao liberado"
+                              }catch(e:Exception){ txtStatus.text="Erro JSON" }
                           }
-                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro: ${e.message}" } }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede" } }
                   }
               }
               fun carregarM3U(link: String){
@@ -141,7 +150,7 @@ jobs:
                               val line=l.trim()
                               if(line.startsWith("#EXTINF")){
                                   nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal"
-                                  grupo = Regex("group-title=\"([^\"]+)\"").find(line)?.groupValues?.get(1) ?: "Sem"
+                                  grupo = Regex("group-title=\"([^\"]+)\"").find(line)?.groupValues?.get(1) ?: "Sem Categoria"
                               } else if(line.startsWith("http")){
                                   val tipo = when{
                                       line.contains("/movie/",true) || grupo.lowercase().contains("filme") -> "MOVIES"
@@ -154,14 +163,14 @@ jobs:
                                   mapa[grupo]?.add(c)
                               }
                           }
-                          runOnUiThread{ layoutAtivacao.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE }
+                          runOnUiThread{ layoutAtivacao.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; txtStatus.text="OK" }
                       }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro M3U" } }
                   }
               }
               fun abrirCategorias(tipo: String){
                   currentTipo=tipo
                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                  if(mapa.isEmpty()) return
+                  if(mapa.isEmpty()){ Toast.makeText(this,"Vazio $tipo",Toast.LENGTH_SHORT).show(); return }
                   currentGruposKeys=mapa.keys.sorted()
                   txtTituloLista.text="Categorias $tipo"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
@@ -181,13 +190,17 @@ jobs:
               fun playUrl(canal: Canal){
                   layoutLista.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE
                   findViewById<TextView>(R.id.txtTocando).text=canal.nome
-                  val item = MediaItem.fromUri(canal.url)
-                  exoPlayer?.setMediaItem(item); exoPlayer?.prepare(); exoPlayer?.playWhenReady=true
+                  try{
+                      val item = MediaItem.fromUri(canal.url)
+                      exoPlayer?.setMediaItem(item)
+                      exoPlayer?.prepare()
+                      exoPlayer?.playWhenReady=true
+                  }catch(e:Exception){ Toast.makeText(this,"Erro player",Toast.LENGTH_SHORT).show() }
               }
               fun abrirAjustes(){
                   currentTipo="AJUSTES"
                   txtTituloLista.text="Ajustes"
-                  listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, listOf("Limpar"))
+                  listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, listOf("Limpar cache"))
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
               fun voltar(){
@@ -259,8 +272,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 19
-                  versionName "19.0-MEDIA3-FIX"
+                  versionCode 20
+                  versionName "20.0-FIX-APPCOMPAT"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -270,6 +283,7 @@ jobs:
               kotlinOptions { jvmTarget = '17' }
           }
           dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'androidx.media3:media3-exoplayer:1.2.1'
               implementation 'androidx.media3:media3-ui:1.2.1'
               implementation 'androidx.media3:media3-common:1.2.1'
@@ -298,9 +312,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v19 MEDIA3 FIX CURL
+      - name: Build APK v20 APPCOMPAT
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v19-MEDIA3-FIX-CURL, path: "**/*.apk" }
+        with: { name: SuperPlay-v20-APPCOMPAT-FIX, path: "**/*.apk" }
