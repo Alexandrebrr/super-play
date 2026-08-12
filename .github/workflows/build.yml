@@ -1,3 +1,4 @@
+
 name: build
 on: [workflow_dispatch, push]
 jobs:
@@ -5,44 +6,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v14 ESTAVEL com Icone
+      - name: Super Play v15 MINIMAL SEM ICONE
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
-          mkdir -p app/src/main/res/mipmap-xxxhdpi
-          mkdir -p app/src/main/res/mipmap-xxhdpi
-          mkdir -p app/src/main/res/mipmap-xhdpi
-          mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p app/src/main/res/mipmap-mdpi
-
-          pip3 install pillow -q
-          python3 - <<'PY'
-          from PIL import Image, ImageDraw
-          import os, random
-          size=512
-          im=Image.new("RGBA",(size,size),(5,14,42,255))
-          draw=ImageDraw.Draw(im)
-          for i in range(8):
-              draw.rounded_rectangle([(i,i),(size-i,size-i)], radius=90-i, outline=(0,255,200, int(255*(1-i/8))), width=2)
-          draw.rounded_rectangle([(90,140),(422,380)], radius=30, outline=(255,255,255,255), width=28)
-          draw.polygon([(160,380),(352,380),(340,420),(172,420)], fill=(255,255,255,255))
-          draw.polygon([(210,190),(210,330),(340,260)], outline=(0,255,136,255), width=8)
-          im.save("icon.png")
-          for d in ["app/src/main/res/mipmap-xxxhdpi","app/src/main/res/mipmap-xxhdpi","app/src/main/res/mipmap-xhdpi","app/src/main/res/mipmap-hdpi","app/src/main/res/mipmap-mdpi"]:
-              os.makedirs(d, exist_ok=True)
-              sz = 192 if "xxx" in d else 144 if "xx" in d else 96 if "xhdpi" in d else 72 if "hdpi" in d else 48
-              im.resize((sz,sz)).save(f"{d}/ic_launcher.png")
-          W,H=1280,720
-          bg=Image.new("RGB",(W,H),(7,15,42))
-          d=ImageDraw.Draw(bg)
-          for _ in range(300):
-              x=random.randint(0,W); y=random.randint(0,H)
-              b=random.randint(150,255)
-              d.ellipse([(x,y),(x+2,y+2)], fill=(b,b,255))
-          bg.save("app/src/main/res/drawable/bg_space.jpg","JPEG", quality=80)
-          PY
 
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
@@ -108,7 +77,7 @@ jobs:
                   findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       clip.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
-                      Toast.makeText(this, "ID $deviceId copiado", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this, "ID copiado", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificarAtivacao() }
                   findViewById<Button>(R.id.btnCanais).setOnClickListener { abrirCategorias("LIVE") }
@@ -121,8 +90,9 @@ jobs:
                   findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { voltar() }
                   listView.setOnItemClickListener { _, _, pos, _ ->
                       if (txtTituloLista.text.contains("Categoria")) {
-                          abrirCanaisDoGrupo(currentGruposKeys[pos])
-                      } else if (!txtTituloLista.text.contains("Ajustes")) {
+                          val grupoNome = currentGruposKeys[pos]
+                          abrirCanaisDoGrupo(grupoNome)
+                      } else {
                           val canal = getCanaisAtuais()[pos]
                           playUrl(canal.nome, canal.url)
                       }
@@ -131,7 +101,7 @@ jobs:
                   if (saved != null) carregarM3U(saved)
               }
               fun verificarAtivacao(){
-                  txtStatus.text = "Verificando $deviceId..."
+                  txtStatus.text = "Verificando..."
                   thread{
                       try{
                           val url = "https://supplay.online/api/check.php?device_id=$deviceId"
@@ -144,12 +114,12 @@ jobs:
                                   if(json.optString("status")=="active"){
                                       val playlist = json.optString("playlist").replace("\\/", "/")
                                       getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", playlist).apply()
-                                      txtStatus.text="Ativo! Baixando..."
+                                      txtStatus.text="Ativo!"
                                       carregarM3U(playlist)
-                                  } else txtStatus.text="Nao ativado ID $deviceId"
+                                  } else txtStatus.text="Nao ativo"
                               }catch(e:Exception){ txtStatus.text="Erro JSON" }
                           }
-                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede" } }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro: ${e.message}" } }
                   }
               }
               fun carregarM3U(link: String){
@@ -157,8 +127,7 @@ jobs:
                       try{
                           val conn = URL(link).openConnection() as HttpURLConnection
                           conn.setRequestProperty("User-Agent","VLC/3.0")
-                          conn.connectTimeout=20000; conn.readTimeout=20000
-                          val conteudo = conn.inputStream.bufferedReader(Charsets.UTF_8).use{it.readText()}
+                          val conteudo = conn.inputStream.bufferedReader().use{it.readText()}
                           todosCanais.clear(); liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                           var nomeAtual=""; var grupoAtual=""
                           for(linhaRaw in conteudo.lines()){
@@ -168,9 +137,8 @@ jobs:
                                   val g = Regex("group-title=\"([^\"]+)\"").find(l)
                                   grupoAtual = g?.groupValues?.get(1) ?: "Sem Categoria"
                               } else if(l.isNotEmpty() && !l.startsWith("#") && l.startsWith("http")){
-                                  if(nomeAtual.isEmpty()) nomeAtual="Canal"
                                   val tipo = when{
-                                      l.contains("/movie/",true) || grupoAtual.lowercase().contains("filme") || grupoAtual.lowercase().contains("movie") -> "MOVIES"
+                                      l.contains("/movie/",true) || grupoAtual.lowercase().contains("filme") -> "MOVIES"
                                       l.contains("/series/",true) || grupoAtual.lowercase().contains("serie") -> "SERIES"
                                       else -> "LIVE"
                                   }
@@ -179,21 +147,18 @@ jobs:
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   if(!mapa.containsKey(grupoAtual)) mapa[grupoAtual]=mutableListOf()
                                   mapa[grupoAtual]?.add(canal)
-                                  nomeAtual=""; grupoAtual=""
                               }
                           }
                           runOnUiThread{
                               layoutAtivacao.visibility=View.GONE
                               layoutMenu.visibility=View.VISIBLE
-                              txtStatus.text="LIVE:${liveGrupos.size} FILMES:${moviesGrupos.size} SERIES:${seriesGrupos.size}"
                           }
-                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro M3U: ${e.message}" } }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro M3U" } }
                   }
               }
               fun abrirCategorias(tipo: String){
                   currentTipo=tipo
                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                  if(mapa.isEmpty()){ Toast.makeText(this,"Vazio $tipo",Toast.LENGTH_SHORT).show(); return }
                   currentGruposKeys = mapa.keys.sorted()
                   txtTituloLista.text = when(tipo){"MOVIES"->"Categorias Filmes";"SERIES"->"Categorias Series";else->"Categorias Ao Vivo"}
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
@@ -207,7 +172,7 @@ jobs:
                   val canais = mapa[grupo] ?: mutableListOf()
                   txtTituloLista.text = "$grupo - ${canais.size}"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, canais.map{it.nome})
-                  navStack.add("CAT:$grupo")
+                  navStack.add("CAT")
               }
               fun getCanaisAtuais(): List<Canal>{
                   val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
@@ -218,39 +183,27 @@ jobs:
                   layoutPlayer.visibility=View.VISIBLE
                   findViewById<TextView>(R.id.txtTocando).text="Tocando: $nome"
                   navStack.add("CANAL")
-                  try{
-                      val item = MediaItem.fromUri(url)
-                      exoPlayer?.setMediaItem(item)
-                      exoPlayer?.prepare()
-                      exoPlayer?.playWhenReady=true
-                  }catch(e:Exception){ Toast.makeText(this,"Erro: ${e.message}",Toast.LENGTH_SHORT).show() }
+                  val item = MediaItem.fromUri(url)
+                  exoPlayer?.setMediaItem(item)
+                  exoPlayer?.prepare()
+                  exoPlayer?.playWhenReady=true
               }
               fun abrirAjustes(){
-                  currentTipo="AJUSTES"
-                  currentGruposKeys = listOf("Controle dos pais","Ocultar categorias ao vivo","Ocultar Vod","Ocultar series","Limpar historico")
+                  currentGruposKeys = listOf("Ocultar categorias ao vivo","Ocultar Vod","Limpar historico")
                   txtTituloLista.text="Ajustes"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
-                  navStack.add("MENU")
               }
               fun voltar(){
                   if(layoutPlayer.visibility==View.VISIBLE){
                       exoPlayer?.stop()
                       layoutPlayer.visibility=View.GONE
                       layoutLista.visibility=View.VISIBLE
-                      if(navStack.isNotEmpty()) navStack.removeAt(navStack.size-1)
                       return
                   }
-                  if(layoutLista.visibility==View.VISIBLE){
-                      if(navStack.isNotEmpty()){
-                          val last = navStack.removeAt(navStack.size-1)
-                          if(last.startsWith("CAT:")){ abrirCategorias(currentTipo); navStack.removeAt(navStack.size-1); return }
-                      }
-                      layoutLista.visibility=View.GONE
-                      layoutMenu.visibility=View.VISIBLE
-                      return
-                  }
+                  layoutLista.visibility=View.GONE
+                  layoutMenu.visibility=View.VISIBLE
               }
               override fun onBackPressed() { if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() else super.onBackPressed() }
               override fun onDestroy() { super.onDestroy(); exoPlayer?.release() }
@@ -261,53 +214,44 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent" android:layout_height="match_parent"
-              android:background="@drawable/bg_space">
+              android:background="#070F2A">
               <LinearLayout android:id="@+id/layoutAtivacao"
                   android:layout_width="match_parent" android:layout_height="match_parent"
                   android:orientation="vertical" android:gravity="center" android:padding="24dp">
                   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textColor="#FFF" android:textSize="28sp" android:textStyle="bold"/>
-                  <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX-XXXX" android:textColor="#00FF88" android:textSize="36sp" android:textStyle="bold" android:layout_margin="8dp"/>
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="www.supplay.online/ativar" android:textColor="#FFF" android:textSize="14sp" android:textStyle="bold" android:layout_marginBottom="16dp"/>
+                  <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX-XXXX" android:textColor="#00FF88" android:textSize="36sp" android:textStyle="bold"/>
                   <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="48dp" android:text="COPIAR ID"/>
-                  <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="52dp" android:text="VERIFICAR" android:backgroundTint="#00FF88" android:textColor="#000" android:layout_marginTop="8dp"/>
-                  <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aguardando..." android:textColor="#888" android:textSize="11sp" android:gravity="center" android:layout_marginTop="12dp"/>
+                  <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="52dp" android:text="VERIFICAR" android:backgroundTint="#00FF88" android:layout_marginTop="8dp"/>
+                  <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="..." android:textColor="#888" android:gravity="center" android:layout_marginTop="12dp"/>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutMenu"
                   android:layout_width="match_parent" android:layout_height="match_parent"
                   android:orientation="vertical" android:visibility="gone" android:padding="16dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v14" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center" android:layout_marginTop="20dp">
-                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical">
-                          <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="📺 Canais" android:textSize="18sp" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
-                          <Button android:id="@+id/btnListas" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="👥 Listas" android:textSize="11sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+                      <Button android:id="@+id/btnCanais" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:text="Canais" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+                          <Button android:id="@+id/btnFilmes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Filmes" android:layout_margin="4dp"/>
+                          <Button android:id="@+id/btnSeries" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Series" android:layout_margin="4dp"/>
                       </LinearLayout>
                       <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
-                          <Button android:id="@+id/btnFilmes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="▶ Filmes" android:textSize="12sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
-                          <Button android:id="@+id/btnSeries" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="🎬 Series" android:textSize="12sp" android:backgroundTint="#1A2A6A" android:layout_margin="4dp"/>
-                      </LinearLayout>
-                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
-                          <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⚙ Ajustes" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
-                          <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="↻ Atualizar" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
-                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="⇦ Sair" android:textSize="10sp" android:backgroundTint="#1C2C4A" android:layout_margin="2dp"/>
+                          <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ajustes" android:layout_margin="2dp"/>
+                          <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Atualizar" android:layout_margin="2dp"/>
+                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sair" android:layout_margin="2dp"/>
                       </LinearLayout>
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutLista"
                   android:layout_width="match_parent" android:layout_height="match_parent"
-                  android:orientation="vertical" android:visibility="gone" android:background="#0A1931" android:padding="8dp">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                      <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="◀ Voltar"/>
-                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:textSize="16sp" android:textStyle="bold" android:gravity="center"/>
-                  </LinearLayout>
-                  <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0F2240" android:divider="#1A3A6A" android:dividerHeight="1dp" android:layout_marginTop="8dp"/>
+                  android:orientation="vertical" android:visibility="gone" android:padding="8dp">
+                  <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Voltar"/>
+                  <TextView android:id="@+id/txtTituloLista" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Categorias" android:textColor="#FFF" android:textSize="16sp" android:gravity="center"/>
+                  <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0F2240" android:layout_marginTop="8dp"/>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutPlayer"
                   android:layout_width="match_parent" android:layout_height="match_parent"
                   android:orientation="vertical" android:visibility="gone" android:background="#000">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
-                      <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="◀ Voltar"/>
-                      <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando..." android:textColor="#FFF" android:textSize="12sp" android:gravity="center"/>
-                  </LinearLayout>
+                  <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Voltar"/>
+                  <TextView android:id="@+id/txtTocando" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tocando..." android:textColor="#FFF"/>
                   <com.google.android.exoplayer2.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
               </LinearLayout>
           </FrameLayout>
@@ -317,7 +261,7 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="Super Play" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="true">
+              <application android:allowBackup="true" android:label="Super Play" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
@@ -335,8 +279,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdkVersion 21
                   targetSdkVersion 33
-                  versionCode 14
-                  versionName "14.0-EXO-2.19.1"
+                  versionCode 15
+                  versionName "15.0-MINIMAL"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -372,9 +316,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 7.6
-      - name: Build APK v14
+      - name: Build APK v15 MINIMAL
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v14-EXO-FIX, path: "**/*.apk" }
+        with: { name: SuperPlay-v15-MINIMAL-SEM-ICONE, path: "**/*.apk" }
