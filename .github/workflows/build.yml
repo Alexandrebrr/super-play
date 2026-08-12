@@ -7,9 +7,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Recria projeto do ZERO
+      - name: Recria projeto CORRIGIDO namespace
         run: |
-          rm -rf app build .gradle gradle gradle.zip
+          rm -rf app build .gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           
@@ -34,8 +34,7 @@ jobs:
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
+              android:layout_width="match_parent" android:layout_height="match_parent">
               <WebView android:id="@+id/webview"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent" />
@@ -57,32 +56,38 @@ jobs:
           </manifest>
           XML
           
+          # AQUI ESTAVA O ERRO - FALTAVA O NAMESPACE - AGORA CORRIGIDO
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
           android {
-              compileSdkVersion 33
+              namespace 'com.superplay.app'
+              compileSdkVersion 34
               defaultConfig {
                   applicationId "com.superplay.app"
                   minSdkVersion 21
-                  targetSdkVersion 33
+                  targetSdkVersion 34
                   versionCode 1
                   versionName "1.0"
               }
               buildTypes { release { minifyEnabled false } }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
           }
           dependencies {
-              implementation 'androidx.core:core-ktx:1.9.0'
+              implementation 'androidx.core:core-ktx:1.12.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           GRADLE
           
           cat > build.gradle <<'GRADLE'
           buildscript {
-              ext.kotlin_version = '1.9.0'
+              ext.kotlin_version = '1.9.22'
               repositories { google(); mavenCentral() }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:7.4.2'
+                  classpath 'com.android.tools.build:gradle:8.1.4'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
@@ -90,7 +95,6 @@ jobs:
           GRADLE
           
           echo "include ':app'" > settings.gradle
-          echo "sdk.dir=$ANDROID_HOME" > local.properties || true
 
       - uses: actions/setup-java@v4
         with:
@@ -101,17 +105,12 @@ jobs:
 
       - name: Build APK
         run: |
-          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
+          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.0/bin/gradle assembleDebug
-          echo "=== APK GERADO ==="
-          find . -name "*.apk" -type f
-          ls -lh app/build/outputs/apk/debug/
+          ./gradle-8.7/bin/gradle assembleDebug
+          find . -name "*.apk"
 
       - uses: actions/upload-artifact@v4
         with:
           name: SuperPlay-APK
-          path: |
-            **/*.apk
-            app/build/outputs/**/*.apk
-          if-no-files-found: warn
+          path: "**/*.apk"
