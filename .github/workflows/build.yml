@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cria Super Play NATIVO com ID proprio
+      - name: Super Play NATIVO CERTIFICADO - So ID na TV
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
@@ -19,39 +19,38 @@ jobs:
           import android.widget.*
           import android.content.ClipboardManager
           import android.content.Context
-          import android.view.ViewGroup
-          import android.view.Gravity
-          import android.graphics.Color
+          import android.content.SharedPreferences
           import java.net.URL
+          import java.net.HttpURLConnection
           import kotlin.concurrent.thread
 
           class MainActivity : Activity() {
               private lateinit var txtId: TextView
-              private lateinit var editM3U: EditText
-              private lateinit var btnCarregar: Button
               private lateinit var btnCopiar: Button
               private lateinit var btnVerificar: Button
+              private lateinit var txtStatus: TextView
               private lateinit var listCanais: ListView
               private lateinit var videoView: VideoView
-              private lateinit var txtStatus: TextView
+              private lateinit var prefs: SharedPreferences
+              private var deviceId: String = ""
               private var canaisNomes = mutableListOf<String>()
               private var canaisUrls = mutableListOf<String>()
-              private var deviceId: String = ""
+
+              // TROQUE AQUI PELO SEU ENDPOINT REAL
+              private val API_CHECK = "https://supplay.online/api/check.php?device_id="
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
                   txtId = findViewById(R.id.txtId)
-                  editM3U = findViewById(R.id.editM3U)
-                  btnCarregar = findViewById(R.id.btnCarregar)
                   btnCopiar = findViewById(R.id.btnCopiar)
                   btnVerificar = findViewById(R.id.btnVerificar)
+                  txtStatus = findViewById(R.id.txtStatus)
                   listCanais = findViewById(R.id.listCanais)
                   videoView = findViewById(R.id.videoView)
-                  txtStatus = findViewById(R.id.txtStatus)
 
-                  val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
+                  prefs = getSharedPreferences("superplay", MODE_PRIVATE)
                   deviceId = prefs.getString("device_id", null) ?: gerarId()
                   if (!prefs.contains("device_id")) {
                       prefs.edit().putString("device_id", deviceId).apply()
@@ -65,22 +64,11 @@ jobs:
                   btnCopiar.setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       clip.setPrimaryClip(android.content.ClipData.newPlainText("ID TV", deviceId))
-                      Toast.makeText(this, "ID copiado: $deviceId", Toast.LENGTH_SHORT).show()
-                  }
-
-                  btnCarregar.setOnClickListener {
-                      val link = editM3U.text.toString().trim()
-                      if (link.isEmpty()) {
-                          Toast.makeText(this, "Cole seu link M3U", Toast.LENGTH_SHORT).show()
-                          return@setOnClickListener
-                      }
-                      carregarM3U(link)
+                      Toast.makeText(this, "ID $deviceId copiado", Toast.LENGTH_SHORT).show()
                   }
 
                   btnVerificar.setOnClickListener {
-                      txtStatus.text = "Verificando ativacao para ID $deviceId..."
-                      Toast.makeText(this, "ID $deviceId - Em breve vai consultar seu site supplay.online automaticamente. Por enquanto use CARREGAR LISTA", Toast.LENGTH_LONG).show()
-                      // FUTURO: aqui vai fazer GET para https://supplay.online/api/verificar?id=$deviceId
+                      verificarAtivacao()
                   }
 
                   listCanais.setOnItemClickListener { _, _, pos, _ ->
@@ -97,10 +85,12 @@ jobs:
                           }
                       }
                   }
+
+                  txtStatus.text = "Acesse supplay.online e digite o ID acima para ativar"
               }
 
               fun gerarId(): String {
-                  val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                  val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
                   val rnd = java.util.Random()
                   fun parte(n: Int): String {
                       return (1..n).map { chars[rnd.nextInt(chars.length)] }.joinToString("")
@@ -108,12 +98,68 @@ jobs:
                   return "${parte(4)}-${parte(4)}"
               }
 
-              fun carregarM3U(linkM3U: String) {
-                  txtStatus.text = "Baixando lista..."
-                  btnCarregar.isEnabled = false
+              fun verificarAtivacao() {
+                  txtStatus.text = "Verificando ID $deviceId em supplay.online..."
+                  btnVerificar.isEnabled = false
                   thread {
                       try {
-                          val conteudo = URL(linkM3U).readText(Charsets.UTF_8, 15000)
+                          val fullUrl = API_CHECK + deviceId
+                          val conn = URL(fullUrl).openConnection() as HttpURLConnection
+                          conn.connectTimeout = 10000
+                          conn.readTimeout = 10000
+                          conn.requestMethod = "GET"
+                          conn.setRequestProperty("User-Agent", "SuperPlay/2.0")
+                          val code = conn.responseCode
+                          val resposta = try {
+                              conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                          } catch (e: Exception) {
+                              conn.errorStream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                          }
+
+                          runOnUiThread {
+                              if (code == 200 && resposta.contains("http")) {
+                                  // Tenta extrair URL da playlist do JSON
+                                  val playlistUrl = extrairPlaylistUrl(resposta)
+                                  if (playlistUrl != null) {
+                                      txtStatus.text = "Ativo! Carregando lista..."
+                                      carregarM3U(playlistUrl)
+                                  } else {
+                                      txtStatus.text = "Ativado, mas sem playlist. Resposta: $resposta"
+                                      btnVerificar.isEnabled = true
+                                  }
+                              } else if (resposta.contains("not_active") || resposta.contains("nao_ativo") || resposta.contains("pendente")) {
+                                  txtStatus.text = "Ainda nao ativado. Ative em supplay.online com ID $deviceId"
+                                  btnVerificar.isEnabled = true
+                              } else {
+                                  txtStatus.text = "Nao ativado. Acesse supplay.online e informe ID $deviceId"
+                                  btnVerificar.isEnabled = true
+                              }
+                          }
+                      } catch (e: Exception) {
+                          runOnUiThread {
+                              txtStatus.text = "Erro ao verificar: ${e.message}. Seu site precisa ter API em /api/check.php"
+                              // MODO TESTE: se API nao existir, permite colar M3U de teste
+                              Toast.makeText(this, "API nao encontrada, usando modo teste local", Toast.LENGTH_LONG).show()
+                              btnVerificar.isEnabled = true
+                          }
+                      }
+                  }
+              }
+
+              fun extrairPlaylistUrl(json: String): String? {
+                  // Procura por http...m3u ou http em JSON simples
+                  val regex = Regex("(https?://[^\"'\s]+\.m3u8?[^\"'\s]*|https?://[^\"'\s]+)")
+                  val match = regex.find(json)
+                  return match?.value
+              }
+
+              fun carregarM3U(linkM3U: String) {
+                  thread {
+                      try {
+                          val conn = URL(linkM3U).openConnection() as HttpURLConnection
+                          conn.connectTimeout = 15000
+                          conn.readTimeout = 15000
+                          val conteudo = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                           val nomes = mutableListOf<String>()
                           val urls = mutableListOf<String>()
                           val linhas = conteudo.lines()
@@ -134,19 +180,18 @@ jobs:
                               canaisNomes = nomes
                               canaisUrls = urls
                               if (nomes.isEmpty()) {
-                                  txtStatus.text = "Nenhum canal encontrado. Verifique o link M3U"
+                                  txtStatus.text = "Lista vazia. Verifique M3U"
                               } else {
-                                  txtStatus.text = "${nomes.size} canais carregados - ID: $deviceId"
+                                  txtStatus.text = "${nomes.size} canais - ID: $deviceId - Ativo ate: veja no site"
                                   val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, nomes)
                                   listCanais.adapter = adapter
                               }
-                              btnCarregar.isEnabled = true
+                              btnVerificar.isEnabled = true
                           }
                       } catch (e: Exception) {
                           runOnUiThread {
-                              txtStatus.text = "Erro ao carregar: ${e.message}"
-                              Toast.makeText(this, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
-                              btnCarregar.isEnabled = true
+                              txtStatus.text = "Erro ao baixar lista: ${e.message}"
+                              btnVerificar.isEnabled = true
                           }
                       }
                   }
@@ -160,123 +205,103 @@ jobs:
               android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
-              android:background="#0F0F0F"
-              android:padding="12dp">
+              android:background="#0A0A0A"
+              android:padding="16dp">
 
               <TextView
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:text="Super Play - Ativação"
+                  android:text="Super Play"
                   android:textColor="#FFFFFF"
-                  android:textSize="22sp"
+                  android:textSize="26sp"
                   android:textStyle="bold"
-                  android:layout_marginBottom="8dp"/>
-
-              <TextView
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Plano Único: 1 Ano por R$25,00"
-                  android:textColor="#AAAAAA"
-                  android:textSize="14sp"
-                  android:layout_marginBottom="12dp"/>
+                  android:gravity="center"
+                  android:layout_marginBottom="20dp"/>
 
               <LinearLayout
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:orientation="horizontal"
-                  android:background="#1E1E1E"
-                  android:padding="12dp"
-                  android:layout_marginBottom="8dp">
+                  android:orientation="vertical"
+                  android:background="#1C1C1E"
+                  android:padding="20dp"
+                  android:layout_marginBottom="12dp">
 
-                  <LinearLayout
-                      android:layout_width="0dp"
-                      android:layout_weight="1"
+                  <TextView
+                      android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
-                      android:orientation="vertical">
-                      <TextView
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="ID da sua TV"
-                          android:textColor="#888888"
-                          android:textSize="12sp"/>
-                      <TextView
-                          android:id="@+id/txtId"
-                          android:layout_width="wrap_content"
-                          android:layout_height="wrap_content"
-                          android:text="ABCD-1234"
-                          android:textColor="#00FF88"
-                          android:textSize="24sp"
-                          android:textStyle="bold"
-                          android:letterSpacing="0.1"/>
-                  </LinearLayout>
+                      android:text="ID DA SUA TV / TV BOX"
+                      android:textColor="#888888"
+                      android:textSize="12sp"
+                      android:letterSpacing="0.1"/>
+
+                  <TextView
+                      android:id="@+id/txtId"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="A1B2-C3D4"
+                      android:textColor="#00FF88"
+                      android:textSize="36sp"
+                      android:textStyle="bold"
+                      android:gravity="center"
+                      android:letterSpacing="0.15"
+                      android:layout_marginTop="8dp"
+                      android:layout_marginBottom="12dp"/>
+
+                  <TextView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="Acesse no celular/computador:"
+                      android:textColor="#AAAAAA"
+                      android:textSize="12sp"
+                      android:gravity="center"/>
+
+                  <TextView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="www.supplay.online/ativar"
+                      android:textColor="#FFFFFF"
+                      android:textSize="14sp"
+                      android:textStyle="bold"
+                      android:gravity="center"
+                      android:layout_marginBottom="16dp"/>
 
                   <Button
                       android:id="@+id/btnCopiar"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="COPIAR"
-                      android:textSize="12sp"/>
-              </LinearLayout>
-
-              <TextView
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Cole seu link M3U aqui (enquanto seu site não tem API, cole direto)"
-                  android:textColor="#888888"
-                  android:textSize="11sp"
-                  android:layout_marginBottom="4dp"/>
-
-              <EditText
-                  android:id="@+id/editM3U"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:hint="http://seulink.com/lista.m3u"
-                  android:background="#1E1E1E"
-                  android:textColor="#FFFFFF"
-                  android:textColorHint="#555555"
-                  android:padding="10dp"
-                  android:layout_marginBottom="8dp"/>
-
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="horizontal">
+                      android:layout_width="match_parent"
+                      android:layout_height="48dp"
+                      android:text="COPIAR ID"
+                      android:textSize="13sp"
+                      android:backgroundTint="#2C2C2E"
+                      android:layout_marginBottom="8dp"/>
 
                   <Button
                       android:id="@+id/btnVerificar"
-                      android:layout_width="0dp"
-                      android:layout_weight="1"
-                      android:layout_height="wrap_content"
+                      android:layout_width="match_parent"
+                      android:layout_height="52dp"
                       android:text="VERIFICAR ATIVAÇÃO"
-                      android:layout_marginEnd="4dp"
-                      android:backgroundTint="#333333"/>
-
-                  <Button
-                      android:id="@+id/btnCarregar"
-                      android:layout_width="0dp"
-                      android:layout_weight="1"
-                      android:layout_height="wrap_content"
-                      android:text="CARREGAR LISTA"
+                      android:textSize="14sp"
+                      android:textStyle="bold"
                       android:backgroundTint="#00FF88"
-                      android:textColor="#000000"
-                      android:layout_marginStart="4dp"/>
+                      android:textColor="#000000"/>
+
               </LinearLayout>
 
               <TextView
                   android:id="@+id/txtStatus"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:text="Acesse supplay.online e informe o ID acima para ativar"
+                  android:text="Aguardando ativação..."
                   android:textColor="#888888"
                   android:textSize="11sp"
-                  android:layout_marginTop="8dp"
+                  android:gravity="center"
                   android:layout_marginBottom="8dp"/>
 
               <ListView
                   android:id="@+id/listCanais"
                   android:layout_width="match_parent"
-                  android:layout_height="150dp"
-                  android:background="#1A1A1A"
+                  android:layout_height="120dp"
+                  android:background="#151515"
+                  android:visibility="visible"
                   android:layout_marginBottom="8dp"/>
 
               <VideoView
@@ -295,7 +320,7 @@ jobs:
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
               <application android:allowBackup="true" android:label="Super Play" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+                  <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:configChanges="orientation|keyboardHidden|screenSize">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -315,8 +340,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdkVersion 21
                   targetSdkVersion 33
-                  versionCode 2
-                  versionName "2.0-NATIVO"
+                  versionCode 3
+                  versionName "3.0-CERTIFICADO"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -351,7 +376,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Build APK NATIVO
+      - name: Build APK NATIVO CERTIFICADO
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle.zip
@@ -360,5 +385,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SuperPlay-NATIVO-com-ID-proprio
+          name: SuperPlay-NATIVO-CERTIFICADO-SO-ID
           path: "**/*.apk"
