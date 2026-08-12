@@ -10,6 +10,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Unzip and Prepare
+        run: |
+          ls -la
+          unzip -o "PACOTE-2-APP-FINAL-CORRIGIDO (1).zip" -d . || unzip -o PACOTE-*.zip -d . || true
+          rm -rf .github
+          ls -la
+          find . -maxdepth 4 -name "gradlew" -print
+          # Se o projeto veio dentro de uma pasta, move tudo pra raiz
+          for d in */; do
+            if [ -f "$d/gradlew" ] || [ -f "$d/app/build.gradle" ]; then
+              echo "Found project in $d"
+              cp -rf $d/. .
+              break
+            fi
+          done
+          ls -la
+          chmod +x gradlew || true
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -21,8 +39,6 @@ jobs:
 
       - name: Build APK
         run: |
-          ls -la
-          chmod +x gradlew || true
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
