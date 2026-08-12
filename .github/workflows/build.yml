@@ -6,13 +6,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v23 FIX LISTA E SAIR
+      - name: Super Play v24 FIX LISTA SEM ERRO
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
-
           cat > app/src/main/res/drawable/ic_launcher.xml <<'XML'
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="512dp" android:height="512dp" android:viewportWidth="512" android:viewportHeight="512">
             <path android:fillColor="#050E2A" android:pathData="M0,0h512v512h-512z"/>
@@ -21,18 +20,15 @@ jobs:
             <path android:fillColor="#00FF88" android:pathData="M215,190l0,120l100,-60z"/>
           </vector>
           XML
-
           cat > app/src/main/res/drawable/bg_space.xml <<'XML'
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
             <gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/>
           </shape>
           XML
-
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
           android.enableJetifier=true
           PROP
-
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.app.Activity
@@ -99,7 +95,7 @@ jobs:
                   findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       clip.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
-                      Toast.makeText(this, "ID $deviceId copiado", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(this, "ID copiado", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificarAtivacao() }
                   findViewById<Button>(R.id.btnEntrar).setOnClickListener { abrirMenuDireto() }
@@ -107,7 +103,7 @@ jobs:
                   findViewById<Button>(R.id.btnFilmes).setOnClickListener { abrirCategorias("MOVIES") }
                   findViewById<Button>(R.id.btnSeries).setOnClickListener { abrirCategorias("SERIES") }
                   findViewById<Button>(R.id.btnAjustes).setOnClickListener { abrirAjustes() }
-                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { 
+                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener {
                       if(lastPlaylistUrl.isNotEmpty()) carregarM3U(lastPlaylistUrl) else verificarAtivacao()
                   }
                   findViewById<Button>(R.id.btnSair).setOnClickListener { voltarParaAtivacao() }
@@ -116,7 +112,7 @@ jobs:
                   listView.setOnItemClickListener { _, _, pos, _ ->
                       if (txtTituloLista.text.toString().startsWith("Categorias") || currentTipo=="AJUSTES") {
                           if(currentTipo=="AJUSTES"){
-                              if(pos==3){ // Limpar
+                              if(pos==5){
                                   prefs.edit().remove("playlist_url").apply()
                                   liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                                   Toast.makeText(this,"Cache limpo",Toast.LENGTH_SHORT).show()
@@ -131,8 +127,6 @@ jobs:
                       }
                   }
                   if(lastPlaylistUrl.isNotEmpty()){
-                      txtStatus.text = "Lista salva encontrada"
-                      txtStatusMenu.text = "Carregando lista salva..."
                       abrirMenuDireto()
                       carregarM3U(lastPlaylistUrl)
                   }
@@ -143,80 +137,56 @@ jobs:
                   layoutPlayer.visibility = View.GONE
                   layoutAtivacao.visibility = View.VISIBLE
                   exoPlayer?.stop()
-                  Toast.makeText(this,"Voltou para ativacao ID $deviceId",Toast.LENGTH_SHORT).show()
               }
               fun abrirMenuDireto(){
                   layoutAtivacao.visibility = View.GONE
                   layoutMenu.visibility = View.VISIBLE
                   layoutLista.visibility = View.GONE
                   layoutPlayer.visibility = View.GONE
-                  txtStatusMenu.text = "LIVE:${liveGrupos.values.sumOf{it.size}} FILMES:${moviesGrupos.values.sumOf{it.size}} SERIES:${seriesGrupos.values.sumOf{it.size}} | ID $deviceId"
+                  txtStatusMenu.text = "LIVE:${liveGrupos.values.sumOf{it.size}} FIL:${moviesGrupos.values.sumOf{it.size}} SER:${seriesGrupos.values.sumOf{it.size}} ID $deviceId"
               }
               fun verificarAtivacao(){
-                  txtStatus.text = "Verificando $deviceId..."
-                  txtStatusMenu.text = "Verificando..."
+                  txtStatus.text = "Verificando..."
                   thread{
                       try{
                           val url = "https://supplay.online/api/check.php?device_id=$deviceId"
                           val conn = URL(url).openConnection() as HttpURLConnection
                           conn.connectTimeout=12000; conn.readTimeout=12000
-                          conn.setRequestProperty("User-Agent","SuperPlay/1.0")
-                          conn.instanceFollowRedirects = true
                           val resp = conn.inputStream.bufferedReader().use{it.readText()}
                           runOnUiThread{
                               try{
                                   val json = JSONObject(resp)
                                   if(json.optString("status")=="active"){
-                                      var pl = json.optString("playlist","").replace("\\/", "/")
+                                      var pl = json.optString("playlist","")
                                       if(pl.isEmpty()) pl = json.optString("url","")
+                                      pl = pl.replace("\/","/")
                                       if(pl.isNotEmpty()){
                                           lastPlaylistUrl = pl
                                           getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
-                                          txtStatus.text="Ativo! Link: ${pl.take(60)}..."
-                                          txtStatusMenu.text="Ativo! Baixando..."
                                           abrirMenuDireto()
                                           carregarM3U(pl)
                                       } else {
-                                          txtStatus.text="Ativo mas sem link no JSON: $resp"
-                                          Toast.makeText(this, "Servidor ativo mas sem playlist", Toast.LENGTH_LONG).show()
+                                          txtStatus.text="Ativo sem link"
                                           abrirMenuDireto()
                                       }
                                   } else {
-                                      txtStatus.text="Nao ativado: $resp"
-                                      Toast.makeText(this, "Ative em supplay.online/ativar", Toast.LENGTH_LONG).show()
+                                      txtStatus.text="Nao ativo"
                                   }
-                              }catch(e:Exception){
-                                  txtStatus.text="Erro JSON: ${e.message} RESP:${resp.take(200)}"
-                                  Toast.makeText(this,"Erro JSON ${e.message}",Toast.LENGTH_LONG).show()
-                              }
+                              }catch(e:Exception){ txtStatus.text="Erro JSON ${e.message}" }
                           }
-                      }catch(e:Exception){
-                          runOnUiThread{
-                              txtStatus.text="Erro rede: ${e.message}"
-                              txtStatusMenu.text="Erro rede, tentando lista salva"
-                              if(lastPlaylistUrl.isNotEmpty()){
-                                  abrirMenuDireto()
-                                  carregarM3U(lastPlaylistUrl)
-                              }
-                          }
-                      }
+                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede ${e.message}" } }
                   }
               }
               fun carregarM3U(link: String){
-                  txtStatusMenu.text = "Baixando lista... ${link.take(40)}"
+                  txtStatusMenu.text = "Baixando..."
                   thread{
                       try{
                           val conn = URL(link).openConnection() as HttpURLConnection
                           conn.connectTimeout=20000; conn.readTimeout=40000
-                          conn.setRequestProperty("User-Agent","VLC/3.0.20 LibVLC/3.0.20")
-                          conn.setRequestProperty("Accept","*/*")
-                          conn.instanceFollowRedirects = true
+                          conn.setRequestProperty("User-Agent","VLC/3.0.20")
                           val code = conn.responseCode
                           if(code!=200) throw Exception("HTTP $code")
                           val txt = conn.inputStream.bufferedReader().use{it.readText()}
-                          if(txt.length < 20) throw Exception("M3U muito pequeno: ${txt.take(100)}")
-                          // LOG primeiras linhas para debug
-                          val preview = txt.lines().take(5).joinToString("\n")
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                           var nome="Canal"; var grupo="Sem Categoria"
                           var total=0
@@ -224,51 +194,46 @@ jobs:
                               val line=raw.trim()
                               if(line.isEmpty()) continue
                               if(line.startsWith("#EXTINF")){
-                                  // nome apos ultima virgula
-                                  nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal $total"
-                                  // group-title com aspas duplas, simples ou sem aspas
-                                  var g = Regex("group-title="([^"]+)"").find(line)?.groupValues?.get(1)
-                                  if(g==null) g = Regex("group-title='([^']+)'").find(line)?.groupValues?.get(1)
-                                  if(g==null) g = Regex("group-title=([^ \n]+)").find(line)?.groupValues?.get(1)
-                                  if(g!=null && g.isNotBlank()) grupo = g
-                                  if(grupo.isBlank()) grupo="Sem Categoria"
-                              } else if(line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp")){
+                                  nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal"
+                                  val p1 = line.indexOf("group-title="")
+                                  if(p1!=-1){
+                                      val p2 = line.indexOf(""", p1+13)
+                                      if(p2!=-1){
+                                          grupo = line.substring(p1+13, p2)
+                                      }
+                                  } else {
+                                      val q1 = line.indexOf("group-title='")
+                                      if(q1!=-1){
+                                          val q2 = line.indexOf("'", q1+13)
+                                          if(q2!=-1) grupo = line.substring(q1+13, q2)
+                                      }
+                                  }
+                              } else if(line.startsWith("http")){
                                   total++
-                                  // Detecta tipo pelo grupo ou URL
                                   val gl = grupo.lowercase()
                                   val ll = line.lowercase()
                                   val tipo = when{
                                       gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"
-                                      gl.contains("serie") || gl.contains("série") || ll.contains("/series/") -> "SERIES"
+                                      gl.contains("serie") || ll.contains("/series/") -> "SERIES"
                                       else -> "LIVE"
                                   }
-                                  val canal = Canal(if(nome.isBlank()) "Canal $total" else nome, line, grupo, tipo)
+                                  val canal = Canal(nome, line, grupo, tipo)
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   if(!mapa.containsKey(grupo)) mapa[grupo]=mutableListOf()
                                   mapa[grupo]?.add(canal)
-                                  // reseta nome para proximo
                                   nome="Canal"; grupo="Sem Categoria"
                               }
                           }
                           runOnUiThread{
-                              val liveCount = liveGrupos.values.sumOf{it.size}
-                              val movCount = moviesGrupos.values.sumOf{it.size}
-                              val serCount = seriesGrupos.values.sumOf{it.size}
-                              txtStatusMenu.text="OK! LIVE:$liveCount FILMES:$movCount SERIES:$serCount TOTAL:$total"
-                              txtStatus.text="Carregado $total canais"
-                              Toast.makeText(this, "Carregado $total canais LIVE:$liveCount", Toast.LENGTH_LONG).show()
-                              if(liveCount==0 && movCount==0 && serCount==0){
-                                  txtStatusMenu.text="Parse 0 canais! Preview: ${preview.take(150)}"
-                                  Toast.makeText(this, "M3U veio mas nao parseou! ${preview.take(80)}", Toast.LENGTH_LONG).show()
-                              }
+                              val lc = liveGrupos.values.sumOf{it.size}
+                              val mc = moviesGrupos.values.sumOf{it.size}
+                              val sc = seriesGrupos.values.sumOf{it.size}
+                              txtStatusMenu.text="OK LIVE:$lc FIL:$mc SER:$sc TOTAL:$total"
+                              Toast.makeText(this, "Carregado $total", Toast.LENGTH_LONG).show()
                               if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
                           }
                       }catch(e:Exception){
-                          runOnUiThread{
-                              txtStatusMenu.text="Erro M3U: ${e.message}"
-                              txtStatus.text="Erro M3U: ${e.message}"
-                              Toast.makeText(this, "Erro M3U: ${e.message}", Toast.LENGTH_LONG).show()
-                          }
+                          runOnUiThread{ txtStatusMenu.text="Erro M3U ${e.message}" }
                       }
                   }
               }
@@ -276,12 +241,11 @@ jobs:
                   currentTipo=tipo
                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   if(mapa.isEmpty()){
-                      Toast.makeText(this,"Vazio $tipo - clique Atualizar. Total LIVE:${liveGrupos.values.sumOf{it.size}}",Toast.LENGTH_LONG).show()
-                      txtStatusMenu.text="Vazio $tipo - tente Atualizar"
+                      Toast.makeText(this,"Vazio $tipo clique Atualizar",Toast.LENGTH_LONG).show()
                       return
                   }
                   currentGruposKeys=mapa.keys.sorted()
-                  txtTituloLista.text = when(tipo){"MOVIES"->"Categorias Filmes (${mapa.size})";"SERIES"->"Categorias Series (${mapa.size})";else->"Categorias Ao Vivo (${mapa.size})"}
+                  txtTituloLista.text="Categorias ${mapa.size}"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
@@ -290,8 +254,7 @@ jobs:
                   currentGrupoSelecionado=g
                   val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   val lista=mapa[g]?: emptyList()
-                  if(lista.isEmpty()){ Toast.makeText(this,"Grupo vazio $g",Toast.LENGTH_SHORT).show(); return }
-                  txtTituloLista.text="$g - ${lista.size} canais"
+                  txtTituloLista.text="$g ${lista.size}"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
               }
               fun getCanaisAtuais(): List<Canal>{
@@ -301,21 +264,19 @@ jobs:
               fun playUrl(canal: Canal){
                   layoutLista.visibility=View.GONE
                   layoutPlayer.visibility=View.VISIBLE
-                  findViewById<TextView>(R.id.txtTocando).text="Tocando: ${canal.nome}"
-                  try{
-                      val item = MediaItem.fromUri(canal.url)
-                      exoPlayer?.setMediaItem(item)
-                      exoPlayer?.prepare()
-                      exoPlayer?.playWhenReady=true
-                  }catch(e:Exception){ Toast.makeText(this,"Erro player: ${e.message}",Toast.LENGTH_SHORT).show() }
+                  findViewById<TextView>(R.id.txtTocando).text=canal.nome
+                  val item = MediaItem.fromUri(canal.url)
+                  exoPlayer?.setMediaItem(item)
+                  exoPlayer?.prepare()
+                  exoPlayer?.playWhenReady=true
               }
               fun abrirAjustes(){
                   currentTipo="AJUSTES"
-                  val liveCount = liveGrupos.values.sumOf{it.size}
-                  val movCount = moviesGrupos.values.sumOf{it.size}
-                  val serCount = seriesGrupos.values.sumOf{it.size}
-                  currentGruposKeys=listOf("ID: $deviceId","LIVE: $liveCount canais","FILMES: $movCount","SERIES: $serCount","URL: ${lastPlaylistUrl.take(60)}","Limpar cache e voltar")
-                  txtTituloLista.text="Ajustes - Super Play v23"
+                  val lc = liveGrupos.values.sumOf{it.size}
+                  val mc = moviesGrupos.values.sumOf{it.size}
+                  val sc = seriesGrupos.values.sumOf{it.size}
+                  currentGruposKeys=listOf("ID $deviceId","LIVE $lc","FILMES $mc","SERIES $sc","URL ${lastPlaylistUrl.take(50)}","Limpar e voltar")
+                  txtTituloLista.text="Ajustes"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
@@ -324,73 +285,66 @@ jobs:
                   if(layoutPlayer.visibility==View.VISIBLE){ exoPlayer?.stop(); layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; return }
                   if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return }
               }
-              override fun onBackPressed() { 
-                  if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() 
-                  else voltarParaAtivacao()
-              }
+              override fun onBackPressed() { if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() else voltarParaAtivacao() }
               override fun onDestroy() { super.onDestroy(); exoPlayer?.release() }
           }
           KT
-
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/bg_space">
               <LinearLayout android:id="@+id/layoutAtivacao" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center" android:padding="20dp">
                   <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
                       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textColor="#FFF" android:textSize="28sp" android:textStyle="bold"/>
-                      <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX-XXXX" android:textColor="#00FF88" android:textSize="34sp" android:textStyle="bold" android:layout_marginTop="8dp"/>
+                      <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX-XXXX" android:textColor="#00FF88" android:textSize="34sp" android:textStyle="bold"/>
                       <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="..." android:textColor="#888" android:gravity="center" android:layout_marginTop="12dp"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="16dp">
                       <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="48dp" android:text="COPIAR ID"/>
                       <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="52dp" android:text="VERIFICAR" android:backgroundTint="#00FF88" android:textColor="#000" android:layout_marginTop="8dp"/>
-                      <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="48dp" android:text="ENTRAR NO MENU" android:backgroundTint="#1A3A8A" android:textColor="#FFF" android:layout_marginTop="8dp"/>
+                      <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="48dp" android:text="ENTRAR" android:backgroundTint="#1A3A8A" android:layout_marginTop="8dp"/>
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutMenu" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:padding="12dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v23 HORIZONTAL FIX LISTA" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
-                  <TextView android:id="@+id/txtStatusMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="..." android:textColor="#00FF88" android:textSize="12sp" android:gravity="center" android:padding="4dp"/>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
-                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical" android:gravity="center">
-                          <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="📺 Canais Ao Vivo" android:textSize="18sp" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
-                          <Button android:id="@+id/btnFilmes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="▶ Filmes" android:textSize="18sp" android:layout_margin="4dp"/>
-                          <Button android:id="@+id/btnSeries" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="🎬 Séries" android:textSize="18sp" android:layout_margin="4dp"/>
+                  <TextView android:id="@+id/txtStatusMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="..." android:textColor="#00FF88" android:textSize="12sp" android:gravity="center"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical">
+                          <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Canais Ao Vivo" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
+                          <Button android:id="@+id/btnFilmes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Filmes" android:layout_margin="4dp"/>
+                          <Button android:id="@+id/btnSeries" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Series" android:layout_margin="4dp"/>
                       </LinearLayout>
-                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                          <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="⚙ Ajustes" android:layout_margin="3dp"/>
-                          <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="↻ Atualizar" android:layout_margin="3dp"/>
-                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="⇦ Sair p/ Código" android:layout_margin="3dp"/>
+                      <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical">
+                          <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Ajustes" android:layout_margin="3dp"/>
+                          <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Atualizar" android:layout_margin="3dp"/>
+                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Sair p/ Codigo" android:layout_margin="3dp"/>
                       </LinearLayout>
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutLista" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:background="#0A1931" android:padding="8dp">
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                      <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="◀ Voltar"/>
-                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:textSize="16sp" android:gravity="center"/>
+                      <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Voltar"/>
+                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
                   <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#0F2240" android:layout_marginTop="8dp"/>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutPlayer" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:background="#000">
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
-                      <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="◀ Voltar"/>
-                      <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando..." android:textColor="#FFF" android:gravity="center"/>
+                      <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Voltar"/>
+                      <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
                   <androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
               </LinearLayout>
           </FrameLayout>
           XML
-
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application android:allowBackup="true" android:label="Super Play" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:screenOrientation="landscape" android:configChanges="orientation|screenSize|keyboardHidden">
+                  <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:screenOrientation="landscape">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>
           XML
-
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
@@ -401,8 +355,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 23
-                  versionName "23.0-FIX-LISTA-SAIR"
+                  versionCode 24
+                  versionName "24.0-FIX-COMPILACAO"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -418,7 +372,6 @@ jobs:
               implementation 'androidx.media3:media3-common:1.2.1'
           }
           GRADLE
-
           cat > build.gradle <<'GRADLE'
           buildscript {
               ext.kotlin_version = '1.9.10'
@@ -430,10 +383,8 @@ jobs:
           }
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
-
           echo "include ':app'" > settings.gradle
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
@@ -441,9 +392,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v23 FIX LISTA SAIR
+      - name: Build APK v24 FIX
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v23-FIX-LISTA-SAIR, path: "**/*.apk" }
+        with: { name: SuperPlay-v24-FIX-COMPILACAO, path: "**/*.apk" }
