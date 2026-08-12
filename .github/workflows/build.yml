@@ -58,6 +58,7 @@ jobs:
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
           android {
+              namespace 'com.superplay.app'
               compileSdkVersion 33
               defaultConfig {
                   applicationId "com.superplay.app"
