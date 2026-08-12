@@ -18,6 +18,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-mdpi
 
           # --- GERA ICONE E FUNDO COM PYTHON (SEM BASE64) ---
+          pip3 install pillow -q
           python3 - <<'PY'
           from PIL import Image, ImageDraw
           import random, math, os
