@@ -178,6 +178,7 @@ jobs:
                   versionName "1.0"
               }
               buildTypes { release { minifyEnabled false } }
+              kotlinOptions { jvmTarget = '17' }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
