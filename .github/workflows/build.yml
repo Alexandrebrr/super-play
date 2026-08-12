@@ -6,12 +6,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Recria projeto do ZERO - SUPPLAY.ONLINE
+      - name: Recria Super Play OFICIAL supplay.online
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
-          
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.os.Bundle
@@ -31,7 +30,6 @@ jobs:
               }
           }
           KT
-          
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -42,7 +40,6 @@ jobs:
                   android:layout_height="match_parent" />
           </FrameLayout>
           XML
-          
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -57,7 +54,6 @@ jobs:
               </application>
           </manifest>
           XML
-          
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
@@ -81,7 +77,6 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           GRADLE
-          
           cat > build.gradle <<'GRADLE'
           buildscript {
               ext.kotlin_version = '1.9.0'
@@ -93,26 +88,21 @@ jobs:
           }
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
-          
           echo "include ':app'" > settings.gradle
-          echo "sdk.dir=$ANDROID_HOME" > local.properties || echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - uses: android-actions/setup-android@v3
-
       - name: Build APK
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.0/bin/gradle assembleDebug --stacktrace --info | tail -n 200
-          ls -lh app/build/outputs/apk/debug/ || true
-
+          ./gradle-8.0/bin/gradle assembleDebug
+          find . -name "*.apk" -type f
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: SuperPlay-OFICIAL-supplay.online
-          path: app/build/outputs/apk/debug/*.apk
+          path: "**/*.apk"
