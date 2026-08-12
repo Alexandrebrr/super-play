@@ -44,10 +44,12 @@ jobs:
           for s in range(6,0,-1):
               draw.polygon(play, outline=(0,255,136, int(40*s)), width=s)
           im.save("icon.png")
-          # copia para mipmap
-          for d in ["app/src/main/res/mipmap-xxxhdpi","app/src/main/res/mipmap-xxhdpi","app/src/main/res/mipmap-xhdpi","app/src/main/res/mipmap-hdpi","app/src/main/res/mipmap-mdpi","app/src/main/res/drawable"]:
+          # copia para mipmap (NAO salva no drawable pra nao duplicar)
+          for d in ["app/src/main/res/mipmap-xxxhdpi","app/src/main/res/mipmap-xxhdpi","app/src/main/res/mipmap-xhdpi","app/src/main/res/mipmap-hdpi","app/src/main/res/mipmap-mdpi"]:
               os.makedirs(d, exist_ok=True)
-              im.resize((192,192) if "xxx" in d else (144,144) if "xx" in d else (96,96) if "xhdpi" in d and "xx" not in d else (72,72) if "hdpi" in d else (48,48) if "mdpi" in d else (512,512)).save(f"{d}/ic_launcher.png")
+              sz = 192 if "xxx" in d else 144 if "xx" in d else 96 if "xhdpi" in d else 72 if "hdpi" in d else 48
+              im.resize((sz,sz)).save(f"{d}/ic_launcher.png")
+          print("icone copiado para mipmap")
           print("icone gerado")
           # FUNDO ESTRELAS
           W,H=1280,720
