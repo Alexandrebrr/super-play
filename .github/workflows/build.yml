@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v12 ESTAVEL com Icone
+      - name: Super Play v14 ESTAVEL com Icone
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
@@ -56,9 +56,9 @@ jobs:
           import java.net.HttpURLConnection
           import kotlin.concurrent.thread
           import org.json.JSONObject
-          import androidx.media3.exoplayer.ExoPlayer
-          import androidx.media3.common.MediaItem
-          import androidx.media3.ui.PlayerView
+          import com.google.android.exoplayer2.ExoPlayer
+          import com.google.android.exoplayer2.MediaItem
+          import com.google.android.exoplayer2.ui.PlayerView
           data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String)
           class MainActivity : Activity() {
               private var deviceId = ""
@@ -275,7 +275,7 @@ jobs:
               <LinearLayout android:id="@+id/layoutMenu"
                   android:layout_width="match_parent" android:layout_height="match_parent"
                   android:orientation="vertical" android:visibility="gone" android:padding="16dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v12" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v14" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center" android:layout_marginTop="20dp">
                       <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical">
                           <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="📺 Canais" android:textSize="18sp" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
@@ -308,7 +308,7 @@ jobs:
                       <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="◀ Voltar"/>
                       <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando..." android:textColor="#FFF" android:textSize="12sp" android:gravity="center"/>
                   </LinearLayout>
-                  <androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                  <com.google.android.exoplayer2.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
               </LinearLayout>
           </FrameLayout>
           XML
@@ -335,8 +335,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdkVersion 21
                   targetSdkVersion 33
-                  versionCode 12
-                  versionName "12.0-ESTAVEL"
+                  versionCode 14
+                  versionName "14.0-EXO-2.19.1"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -346,9 +346,7 @@ jobs:
               kotlinOptions { jvmTarget = '17' }
           }
           dependencies {
-              implementation 'androidx.media3:media3-exoplayer:1.1.1'
-              implementation 'androidx.media3:media3-ui:1.1.1'
-              implementation 'androidx.media3:media3-common:1.1.1'
+              implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
           }
           GRADLE
 
@@ -370,13 +368,13 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
-      - name: Setup Gradle 7.6 (sem curl)
+      - name: Setup Gradle 7.6
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 7.6
-      - name: Build APK v12
+      - name: Build APK v14
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v12-ESTAVEL-ICON, path: "**/*.apk" }
+        with: { name: SuperPlay-v14-EXO-FIX, path: "**/*.apk" }
