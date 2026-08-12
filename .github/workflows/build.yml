@@ -19,21 +19,6 @@ jobs:
           [ -f DeviceManager.kt ] && mv DeviceManager.kt app/src/main/java/com/superplay/app/ || true
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/AndroidManifest.xml || true
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/activity_main.xml || true
-
-          # Se não tiver activity_main, cria um simples
-          if [! -f app/src/main/res/layout/activity_main.xml ]; then
-          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent" android:layout_height="match_parent"
-              android:orientation="vertical">
-              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                  android:text="Super Play" android:textSize="24sp" android:layout_gravity="center" />
-          </LinearLayout>
-          EOF
-          fi
-
-          # AndroidManifest garantido
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -48,7 +33,6 @@ jobs:
               </application>
           </manifest>
           EOF
-
           cat > app/build.gradle <<'EOF'
           plugins {
               id 'com.android.application'
@@ -64,7 +48,9 @@ jobs:
                   versionCode 1
                   versionName "1.0"
               }
-              buildTypes { release { minifyEnabled false } }
+              buildTypes {
+                  release { minifyEnabled false }
+              }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -76,28 +62,24 @@ jobs:
               implementation 'com.google.android.material:material:1.11.0'
           }
           EOF
-
           echo "include ':app'" > settings.gradle
           touch build.gradle
-
-          # Corrige o package do seu MainActivity.kt se estiver errado
-          sed -i 's/^package.*/package com.superplay.app/' app/src/main/java/com/superplay/app/MainActivity.kt || true
           sed -i 's/^package.*/package com.superplay.app/' app/src/main/java/com/superplay/app/*.kt || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK - SEM WRAPPER
+      - name: Build APK
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
           unzip -q gradle.zip
-        ./gradle-8.7/bin/gradle :app:assembleDebug --stacktrace --info
+         ./gradle-8.7/bin/gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
