@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v18 MEDIA3 SDK34 ICON VETOR
+      - name: Super Play v19 MEDIA3 FIX CURL
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
@@ -259,8 +259,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 18
-                  versionName "18.0-MEDIA3"
+                  versionCode 19
+                  versionName "19.0-MEDIA3-FIX"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -294,11 +294,13 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
-      - name: Build APK v18 MEDIA3
+      - name: Setup Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+      - name: Build APK v19 MEDIA3 FIX CURL
         run: |
-          curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
-          unzip -q gradle.zip
-          ./gradle-8.2/bin/gradle assembleDebug --stacktrace --no-daemon
+          gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v18-MEDIA3-ICON-FUNDO, path: "**/*.apk" }
+        with: { name: SuperPlay-v19-MEDIA3-FIX-CURL, path: "**/*.apk" }
