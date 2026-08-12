@@ -6,9 +6,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v22 HORIZONTAL FIX TRAVA
+      - name: Super Play v23 FIX LISTA E SAIR
         run: |
-          rm -rf app build .gradle gradle gradle.zip
+          rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
@@ -54,6 +54,7 @@ jobs:
               private var exoPlayer: ExoPlayer? = null
               private lateinit var txtId: TextView
               private lateinit var txtStatus: TextView
+              private lateinit var txtStatusMenu: TextView
               private lateinit var layoutAtivacao: LinearLayout
               private lateinit var layoutMenu: LinearLayout
               private lateinit var layoutLista: LinearLayout
@@ -67,11 +68,13 @@ jobs:
               private var currentGruposKeys = listOf<String>()
               private var currentGrupoSelecionado = ""
               private var currentTipo = "LIVE"
+              private var lastPlaylistUrl = ""
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
                   txtId = findViewById(R.id.txtId)
                   txtStatus = findViewById(R.id.txtStatus)
+                  txtStatusMenu = findViewById(R.id.txtStatusMenu)
                   layoutAtivacao = findViewById(R.id.layoutAtivacao)
                   layoutMenu = findViewById(R.id.layoutMenu)
                   layoutLista = findViewById(R.id.layoutLista)
@@ -92,6 +95,7 @@ jobs:
                   }
                   deviceId = id!!
                   txtId.text = deviceId
+                  lastPlaylistUrl = prefs.getString("playlist_url", "") ?: ""
                   findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       clip.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
@@ -103,133 +107,167 @@ jobs:
                   findViewById<Button>(R.id.btnFilmes).setOnClickListener { abrirCategorias("MOVIES") }
                   findViewById<Button>(R.id.btnSeries).setOnClickListener { abrirCategorias("SERIES") }
                   findViewById<Button>(R.id.btnAjustes).setOnClickListener { abrirAjustes() }
-                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { verificarAtivacao() }
-                  findViewById<Button>(R.id.btnSair).setOnClickListener { finish() }
+                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { 
+                      if(lastPlaylistUrl.isNotEmpty()) carregarM3U(lastPlaylistUrl) else verificarAtivacao()
+                  }
+                  findViewById<Button>(R.id.btnSair).setOnClickListener { voltarParaAtivacao() }
                   findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
                   findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { voltar() }
                   listView.setOnItemClickListener { _, _, pos, _ ->
                       if (txtTituloLista.text.toString().startsWith("Categorias") || currentTipo=="AJUSTES") {
-                          if(currentTipo=="AJUSTES") return@setOnItemClickListener
+                          if(currentTipo=="AJUSTES"){
+                              if(pos==3){ // Limpar
+                                  prefs.edit().remove("playlist_url").apply()
+                                  liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
+                                  Toast.makeText(this,"Cache limpo",Toast.LENGTH_SHORT).show()
+                                  voltarParaAtivacao()
+                              }
+                              return@setOnItemClickListener
+                          }
                           if(pos < currentGruposKeys.size) abrirCanaisDoGrupo(currentGruposKeys[pos])
                       } else {
                           val lista = getCanaisAtuais()
                           if(pos < lista.size) playUrl(lista[pos])
                       }
                   }
-                  // Se ja tem playlist salva, ja abre o menu direto
-                  prefs.getString("playlist_url", null)?.let {
+                  if(lastPlaylistUrl.isNotEmpty()){
                       txtStatus.text = "Lista salva encontrada"
+                      txtStatusMenu.text = "Carregando lista salva..."
                       abrirMenuDireto()
-                      carregarM3U(it)
+                      carregarM3U(lastPlaylistUrl)
                   }
+              }
+              fun voltarParaAtivacao(){
+                  layoutMenu.visibility = View.GONE
+                  layoutLista.visibility = View.GONE
+                  layoutPlayer.visibility = View.GONE
+                  layoutAtivacao.visibility = View.VISIBLE
+                  exoPlayer?.stop()
+                  Toast.makeText(this,"Voltou para ativacao ID $deviceId",Toast.LENGTH_SHORT).show()
               }
               fun abrirMenuDireto(){
                   layoutAtivacao.visibility = View.GONE
                   layoutMenu.visibility = View.VISIBLE
                   layoutLista.visibility = View.GONE
                   layoutPlayer.visibility = View.GONE
-                  Toast.makeText(this, "Menu aberto - LIVE:${liveGrupos.size} FILMES:${moviesGrupos.size}", Toast.LENGTH_SHORT).show()
+                  txtStatusMenu.text = "LIVE:${liveGrupos.values.sumOf{it.size}} FILMES:${moviesGrupos.values.sumOf{it.size}} SERIES:${seriesGrupos.values.sumOf{it.size}} | ID $deviceId"
               }
               fun verificarAtivacao(){
                   txtStatus.text = "Verificando $deviceId..."
+                  txtStatusMenu.text = "Verificando..."
                   thread{
                       try{
                           val url = "https://supplay.online/api/check.php?device_id=$deviceId"
                           val conn = URL(url).openConnection() as HttpURLConnection
-                          conn.connectTimeout=10000; conn.readTimeout=10000
+                          conn.connectTimeout=12000; conn.readTimeout=12000
                           conn.setRequestProperty("User-Agent","SuperPlay/1.0")
+                          conn.instanceFollowRedirects = true
                           val resp = conn.inputStream.bufferedReader().use{it.readText()}
                           runOnUiThread{
                               try{
                                   val json = JSONObject(resp)
                                   if(json.optString("status")=="active"){
-                                      val pl = json.optString("playlist","").replace("\\/", "/")
+                                      var pl = json.optString("playlist","").replace("\\/", "/")
+                                      if(pl.isEmpty()) pl = json.optString("url","")
                                       if(pl.isNotEmpty()){
+                                          lastPlaylistUrl = pl
                                           getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
-                                      }
-                                      txtStatus.text="Ativo! Abrindo menu..."
-                                      abrirMenuDireto()
-                                      if(pl.isNotEmpty()) carregarM3U(pl) else {
-                                          txtStatus.text = "Ativo mas sem playlist, clique Atualizar"
-                                          Toast.makeText(this, "Ativo! Sem playlist no servidor", Toast.LENGTH_LONG).show()
+                                          txtStatus.text="Ativo! Link: ${pl.take(60)}..."
+                                          txtStatusMenu.text="Ativo! Baixando..."
+                                          abrirMenuDireto()
+                                          carregarM3U(pl)
+                                      } else {
+                                          txtStatus.text="Ativo mas sem link no JSON: $resp"
+                                          Toast.makeText(this, "Servidor ativo mas sem playlist", Toast.LENGTH_LONG).show()
+                                          abrirMenuDireto()
                                       }
                                   } else {
-                                      txtStatus.text="Nao ativado: ${json.optString("status")}"
-                                      Toast.makeText(this, "Ative em supplay.online/ativar ID $deviceId", Toast.LENGTH_LONG).show()
+                                      txtStatus.text="Nao ativado: $resp"
+                                      Toast.makeText(this, "Ative em supplay.online/ativar", Toast.LENGTH_LONG).show()
                                   }
                               }catch(e:Exception){
-                                  txtStatus.text="Erro JSON: ${e.message}"
-                                  // Mesmo com erro JSON, abre menu se ja tem lista
-                                  if(liveGrupos.isNotEmpty() || getSharedPreferences("superplay", MODE_PRIVATE).getString("playlist_url",null)!=null){
-                                      abrirMenuDireto()
-                                  }
+                                  txtStatus.text="Erro JSON: ${e.message} RESP:${resp.take(200)}"
+                                  Toast.makeText(this,"Erro JSON ${e.message}",Toast.LENGTH_LONG).show()
                               }
                           }
                       }catch(e:Exception){
                           runOnUiThread{
                               txtStatus.text="Erro rede: ${e.message}"
-                              // Fallback: abre menu se ja tem algo salvo
-                              val saved = getSharedPreferences("superplay", MODE_PRIVATE).getString("playlist_url",null)
-                              if(saved!=null){
+                              txtStatusMenu.text="Erro rede, tentando lista salva"
+                              if(lastPlaylistUrl.isNotEmpty()){
                                   abrirMenuDireto()
-                                  carregarM3U(saved)
+                                  carregarM3U(lastPlaylistUrl)
                               }
                           }
                       }
                   }
               }
               fun carregarM3U(link: String){
-                  txtStatus.text = "Baixando lista..."
+                  txtStatusMenu.text = "Baixando lista... ${link.take(40)}"
                   thread{
                       try{
                           val conn = URL(link).openConnection() as HttpURLConnection
-                          conn.connectTimeout=15000; conn.readTimeout=30000
+                          conn.connectTimeout=20000; conn.readTimeout=40000
                           conn.setRequestProperty("User-Agent","VLC/3.0.20 LibVLC/3.0.20")
                           conn.setRequestProperty("Accept","*/*")
+                          conn.instanceFollowRedirects = true
                           val code = conn.responseCode
-                          if(code!=200){
-                              throw Exception("HTTP $code")
-                          }
+                          if(code!=200) throw Exception("HTTP $code")
                           val txt = conn.inputStream.bufferedReader().use{it.readText()}
-                          if(txt.length < 50) throw Exception("M3U vazio")
+                          if(txt.length < 20) throw Exception("M3U muito pequeno: ${txt.take(100)}")
+                          // LOG primeiras linhas para debug
+                          val preview = txt.lines().take(5).joinToString("\n")
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
-                          var nome=""; var grupo="Sem Categoria"
-                          var count=0
-                          for(l in txt.lines()){
-                              val line=l.trim()
+                          var nome="Canal"; var grupo="Sem Categoria"
+                          var total=0
+                          for(raw in txt.lines()){
+                              val line=raw.trim()
+                              if(line.isEmpty()) continue
                               if(line.startsWith("#EXTINF")){
-                                  nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal $count"
-                                  grupo = Regex("group-title=\"([^\"]+)\"").find(line)?.groupValues?.get(1) ?: "Sem Categoria"
+                                  // nome apos ultima virgula
+                                  nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal $total"
+                                  // group-title com aspas duplas, simples ou sem aspas
+                                  var g = Regex("group-title="([^"]+)"").find(line)?.groupValues?.get(1)
+                                  if(g==null) g = Regex("group-title='([^']+)'").find(line)?.groupValues?.get(1)
+                                  if(g==null) g = Regex("group-title=([^ \n]+)").find(line)?.groupValues?.get(1)
+                                  if(g!=null && g.isNotBlank()) grupo = g
                                   if(grupo.isBlank()) grupo="Sem Categoria"
-                              } else if(line.startsWith("http")){
-                                  count++
+                              } else if(line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp")){
+                                  total++
+                                  // Detecta tipo pelo grupo ou URL
+                                  val gl = grupo.lowercase()
+                                  val ll = line.lowercase()
                                   val tipo = when{
-                                      line.contains("/movie/",true) || grupo.lowercase().contains("filme") -> "MOVIES"
-                                      line.contains("/series/",true) || grupo.lowercase().contains("serie") -> "SERIES"
+                                      gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"
+                                      gl.contains("serie") || gl.contains("série") || ll.contains("/series/") -> "SERIES"
                                       else -> "LIVE"
                                   }
-                                  val canal = Canal(nome,line,grupo,tipo)
+                                  val canal = Canal(if(nome.isBlank()) "Canal $total" else nome, line, grupo, tipo)
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   if(!mapa.containsKey(grupo)) mapa[grupo]=mutableListOf()
                                   mapa[grupo]?.add(canal)
+                                  // reseta nome para proximo
+                                  nome="Canal"; grupo="Sem Categoria"
                               }
                           }
                           runOnUiThread{
-                              txtStatus.text="OK! LIVE:${liveGrupos.values.sumOf{it.size}} FILMES:${moviesGrupos.values.sumOf{it.size}} SERIES:${seriesGrupos.values.sumOf{it.size}}"
-                              Toast.makeText(this, "Lista carregada: $count canais", Toast.LENGTH_SHORT).show()
-                              // Se ja estava na ativacao, abre menu agora
-                              if(layoutAtivacao.visibility==View.VISIBLE){
-                                  abrirMenuDireto()
+                              val liveCount = liveGrupos.values.sumOf{it.size}
+                              val movCount = moviesGrupos.values.sumOf{it.size}
+                              val serCount = seriesGrupos.values.sumOf{it.size}
+                              txtStatusMenu.text="OK! LIVE:$liveCount FILMES:$movCount SERIES:$serCount TOTAL:$total"
+                              txtStatus.text="Carregado $total canais"
+                              Toast.makeText(this, "Carregado $total canais LIVE:$liveCount", Toast.LENGTH_LONG).show()
+                              if(liveCount==0 && movCount==0 && serCount==0){
+                                  txtStatusMenu.text="Parse 0 canais! Preview: ${preview.take(150)}"
+                                  Toast.makeText(this, "M3U veio mas nao parseou! ${preview.take(80)}", Toast.LENGTH_LONG).show()
                               }
+                              if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
                           }
                       }catch(e:Exception){
                           runOnUiThread{
-                              txtStatus.text="Erro M3U: ${e.message} - ${link.take(50)}"
-                              Toast.makeText(this, "Erro ao baixar M3U: ${e.message}", Toast.LENGTH_LONG).show()
-                              // Mesmo com erro, deixa abrir menu manualmente
-                              if(layoutAtivacao.visibility==View.VISIBLE && (liveGrupos.isNotEmpty() || moviesGrupos.isNotEmpty())){
-                                  abrirMenuDireto()
-                              }
+                              txtStatusMenu.text="Erro M3U: ${e.message}"
+                              txtStatus.text="Erro M3U: ${e.message}"
+                              Toast.makeText(this, "Erro M3U: ${e.message}", Toast.LENGTH_LONG).show()
                           }
                       }
                   }
@@ -238,8 +276,8 @@ jobs:
                   currentTipo=tipo
                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   if(mapa.isEmpty()){
-                      Toast.makeText(this,"Nenhum conteudo $tipo - clique Atualizar",Toast.LENGTH_LONG).show()
-                      txtStatus.text = "Vazio $tipo - ${liveGrupos.size} lives salvos"
+                      Toast.makeText(this,"Vazio $tipo - clique Atualizar. Total LIVE:${liveGrupos.values.sumOf{it.size}}",Toast.LENGTH_LONG).show()
+                      txtStatusMenu.text="Vazio $tipo - tente Atualizar"
                       return
                   }
                   currentGruposKeys=mapa.keys.sorted()
@@ -252,7 +290,7 @@ jobs:
                   currentGrupoSelecionado=g
                   val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   val lista=mapa[g]?: emptyList()
-                  if(lista.isEmpty()){ Toast.makeText(this,"Grupo vazio",Toast.LENGTH_SHORT).show(); return }
+                  if(lista.isEmpty()){ Toast.makeText(this,"Grupo vazio $g",Toast.LENGTH_SHORT).show(); return }
                   txtTituloLista.text="$g - ${lista.size} canais"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
               }
@@ -269,13 +307,15 @@ jobs:
                       exoPlayer?.setMediaItem(item)
                       exoPlayer?.prepare()
                       exoPlayer?.playWhenReady=true
-                      Toast.makeText(this,"Abrindo ${canal.nome}",Toast.LENGTH_SHORT).show()
                   }catch(e:Exception){ Toast.makeText(this,"Erro player: ${e.message}",Toast.LENGTH_SHORT).show() }
               }
               fun abrirAjustes(){
                   currentTipo="AJUSTES"
-                  currentGruposKeys=listOf("ID: $deviceId","LIVE: ${liveGrupos.values.sumOf{it.size}}","FILMES: ${moviesGrupos.values.sumOf{it.size}}","Limpar cache")
-                  txtTituloLista.text="Ajustes"
+                  val liveCount = liveGrupos.values.sumOf{it.size}
+                  val movCount = moviesGrupos.values.sumOf{it.size}
+                  val serCount = seriesGrupos.values.sumOf{it.size}
+                  currentGruposKeys=listOf("ID: $deviceId","LIVE: $liveCount canais","FILMES: $movCount","SERIES: $serCount","URL: ${lastPlaylistUrl.take(60)}","Limpar cache e voltar")
+                  txtTituloLista.text="Ajustes - Super Play v23"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
@@ -284,7 +324,10 @@ jobs:
                   if(layoutPlayer.visibility==View.VISIBLE){ exoPlayer?.stop(); layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; return }
                   if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return }
               }
-              override fun onBackPressed() { if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() else super.onBackPressed() }
+              override fun onBackPressed() { 
+                  if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE) voltar() 
+                  else voltarParaAtivacao()
+              }
               override fun onDestroy() { super.onDestroy(); exoPlayer?.release() }
           }
           KT
@@ -292,7 +335,6 @@ jobs:
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/bg_space">
-              <!-- TELA ATIVACAO - HORIZONTAL TRAVADA -->
               <LinearLayout android:id="@+id/layoutAtivacao" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center" android:padding="20dp">
                   <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
                       <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textColor="#FFF" android:textSize="28sp" android:textStyle="bold"/>
@@ -306,7 +348,8 @@ jobs:
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutMenu" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:padding="12dp">
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v22 HORIZONTAL" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Super Play v23 HORIZONTAL FIX LISTA" android:textColor="#5A6A8A" android:textSize="10sp" android:gravity="end"/>
+                  <TextView android:id="@+id/txtStatusMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="..." android:textColor="#00FF88" android:textSize="12sp" android:gravity="center" android:padding="4dp"/>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
                       <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="2" android:orientation="vertical" android:gravity="center">
                           <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="📺 Canais Ao Vivo" android:textSize="18sp" android:backgroundTint="#1A3A8A" android:layout_margin="4dp"/>
@@ -316,7 +359,7 @@ jobs:
                       <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
                           <Button android:id="@+id/btnAjustes" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="⚙ Ajustes" android:layout_margin="3dp"/>
                           <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="↻ Atualizar" android:layout_margin="3dp"/>
-                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="⇦ Sair" android:layout_margin="3dp"/>
+                          <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="⇦ Sair p/ Código" android:layout_margin="3dp"/>
                       </LinearLayout>
                   </LinearLayout>
               </LinearLayout>
@@ -358,8 +401,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 22
-                  versionName "22.0-HORIZONTAL-FIX"
+                  versionCode 23
+                  versionName "23.0-FIX-LISTA-SAIR"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -398,9 +441,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v22 HORIZONTAL
+      - name: Build APK v23 FIX LISTA SAIR
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v22-HORIZONTAL-FIX, path: "**/*.apk" }
+        with: { name: SuperPlay-v23-FIX-LISTA-SAIR, path: "**/*.apk" }
