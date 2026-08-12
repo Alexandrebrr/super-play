@@ -6,22 +6,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cria Super Play OFICIAL - supplay.online - VERSAO QUE FUNCIONA
+      - name: Cria Super Play OFICIAL PURA - sem appcompat
         run: |
           rm -rf app build .gradle gradle gradle.zip
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
 
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
+          import android.app.Activity
           import android.os.Bundle
           import android.webkit.WebView
           import android.webkit.WebViewClient
           import android.view.KeyEvent
-          import androidx.appcompat.app.AppCompatActivity
 
-          class MainActivity : AppCompatActivity() {
+          class MainActivity : Activity() {
               private lateinit var webView: WebView
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
@@ -55,21 +54,12 @@ jobs:
           </FrameLayout>
           XML
 
-          cat > app/src/main/res/values/themes.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.SuperPlay" parent="Theme.AppCompat.Light.NoActionBar">
-                  <item name="android:windowFullscreen">true</item>
-              </style>
-          </resources>
-          XML
-
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="Super Play" android:theme="@style/Theme.SuperPlay" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|keyboardHidden|screenSize">
+              <application android:allowBackup="true" android:label="Super Play" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:usesCleartextTraffic="true">
+                  <activity android:name=".MainActivity" android:exported="true">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
@@ -79,7 +69,6 @@ jobs:
           </manifest>
           XML
 
-          # ESTA E A CONFIG QUE DEU VERDE NO #60
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
@@ -102,7 +91,6 @@ jobs:
           }
           dependencies {
               implementation 'androidx.core:core-ktx:1.9.0'
-              implementation 'androidx.appcompat:appcompat:1.6.1'
           }
           GRADLE
 
@@ -131,7 +119,7 @@ jobs:
         run: |
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.0-bin.zip
           unzip -q gradle.zip
-          ./gradle-8.0/bin/gradle assembleDebug
+          ./gradle-8.0/bin/gradle assembleDebug --stacktrace
           ls -lh app/build/outputs/apk/debug/
 
       - uses: actions/upload-artifact@v4
