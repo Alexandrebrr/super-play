@@ -9,7 +9,6 @@ jobs:
         with: { distribution: 'temurin', java-version: '17' }
       - name: Setup Android SDK 34
         run: |
-          sudo apt-get update -y
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
@@ -21,23 +20,23 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Super Play v45 MINIMAL VERDE GARANTIDO + TUDO
+          cat $GITHUB_WORKSPACE/local.properties
+      - name: Super Play v46 VERDE REAL COM APK
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
-          cat > app/src/main/res/values/colors.xml <<'XML'
-          <resources><color name="bg">#0A1931</color><color name="accent">#00FF88</color></resources>
-          XML
           cat > app/src/main/res/values/strings.xml <<'XML'
           <resources><string name="app_name">Super Play</string></resources>
+          XML
+          cat > app/src/main/res/values/colors.xml <<'XML'
+          <resources><color name="bg">#0A1931</color></resources>
           XML
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
           android.enableJetifier=true
-          org.gradle.caching=false
           PROP
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
@@ -279,7 +278,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"Limpar cache")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v45"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v46"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
@@ -317,7 +316,7 @@ jobs:
                       <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="4dp" android:layout_marginTop="6dp">
-                      <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="Buscar canal, filme, serie..." android:textColor="#FFFFFF" android:hintTextColor="#888888" android:background="#0F2240" android:padding="8dp"/>
+                      <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="Buscar canal, filme, serie..."/>
                       <Button android:id="@+id/btnLimparBusca" android:layout_width="wrap_content" android:layout_height="40dp" android:text="X"/>
                   </LinearLayout>
                   <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="6dp"/>
@@ -344,21 +343,28 @@ jobs:
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
-          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 45; versionName "45.0-MINIMAL-VERDE" } }
+          android {
+              namespace 'com.superplay.app'
+              compileSdk 34
+              defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 46; versionName "46.0-VERDE-REAL" }
+              buildTypes { release { minifyEnabled false } }
+          }
           GRADLE
           cat > build.gradle <<'GRADLE'
-          buildscript { ext.kotlin_version = '1.9.10'; repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" } }
+          buildscript {
+              ext.kotlin_version = '1.9.10'
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+          }
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
           echo "include ':app'" > settings.gradle
       - uses: gradle/actions/setup-gradle@v4
-        with: { gradle-version: 8.7, cache-disabled: true }
-      - name: Build APK v45 MINIMAL VERDE
+        with: { gradle-version: 8.7 }
+      - name: Build APK v46 VERDE REAL COM APK
         run: |
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/log.txt
-          echo "=== LAST 200 LINES ==="; tail -n 200 /tmp/log.txt
-          find . -name "*.apk" -type f -ls
+          export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
+          gradle assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v45-MINIMAL-VERDE, path: "**/*.apk" }
+        with: { name: SuperPlay-v46-VERDE-REAL-APK, path: "**/*.apk" }
