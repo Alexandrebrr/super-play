@@ -9,7 +9,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Setup Android SDK 34 + 33
+      - name: Setup Android SDK 34
         run: |
           sudo apt-get update -y
           mkdir -p $HOME/android-sdk/cmdline-tools
@@ -21,10 +21,9 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses || true
-          sdkmanager --install "platform-tools" "platforms;android-34" "platforms;android-33" "build-tools;34.0.0" "build-tools;33.0.2"
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-          ls $HOME/android-sdk/platforms/
-      - name: Super Play v43 SEM EXOPLAYER COMPILA 100%
+      - name: Super Play v44 FIX YAML + TUDO + BUSCA + FULLSCREEN
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
@@ -32,22 +31,22 @@ jobs:
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/drawable
           cat > app/src/main/res/drawable/ic_launcher.xml <<'XML'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="512dp" android:height="512dp" android:viewportWidth="512" android:viewportHeight="512">
-            <path android:fillColor="#050E2A" android:pathData="M0,0h512v512h-512z"/>
-            <path android:strokeColor="#00FFC8" android:strokeWidth="12" android:pathData="M40,40h432v432h-432z"/>
-            <path android:fillColor="#FFFFFF" android:pathData="M100,150h312v180h-312z"/>
-            <path android:fillColor="#00FF88" android:pathData="M215,190l0,120l100,-60z"/>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#050E2A" android:pathData="M0,0h108v108h-108z"/>
+            <path android:fillColor="#00FF88" android:pathData="M30,40L30,70L70,55z"/>
           </vector>
           XML
           cat > app/src/main/res/drawable/bg_space.xml <<'XML'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android"><gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/></shape>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+            <gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/>
+          </shape>
           XML
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.caching=false
           PROP
-cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
+          cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.app.Activity
           import android.os.Bundle
@@ -59,8 +58,7 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           import java.net.HttpURLConnection
           import kotlin.concurrent.thread
           import org.json.JSONObject
-          import android.graphics.BitmapFactory
-          data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String, val logo: String)
+          data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String)
           class MainActivity : Activity() {
               private var deviceId = ""
               private lateinit var txtId: TextView
@@ -70,16 +68,9 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
               private lateinit var layoutMenu: LinearLayout
               private lateinit var layoutLista: LinearLayout
               private lateinit var layoutPlayer: LinearLayout
-              private lateinit var layoutDetalhe: LinearLayout
-              private lateinit var layoutPreview: LinearLayout
               private lateinit var txtTituloLista: TextView
               private lateinit var listView: ListView
               private lateinit var videoView: VideoView
-              private lateinit var previewView: VideoView
-              private lateinit var txtEpgPreview: TextView
-              private lateinit var imgCapa: ImageView
-              private lateinit var txtTituloFilme: TextView
-              private lateinit var txtSinopse: TextView
               private lateinit var edtBusca: EditText
               private var liveGrupos = linkedMapOf<String, MutableList<Canal>>()
               private var moviesGrupos = linkedMapOf<String, MutableList<Canal>>()
@@ -91,7 +82,6 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
               private var currentGrupoSelecionado = ""
               private var currentTipo = "LIVE"
               private var lastPlaylistUrl = ""
-              private var currentCanalPreview: Canal? = null
               private var listaCanaisFull = listOf<Canal>()
               private var listaCatsFull = listOf<String>()
               override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,16 +94,9 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   layoutMenu = findViewById(R.id.layoutMenu)
                   layoutLista = findViewById(R.id.layoutLista)
                   layoutPlayer = findViewById(R.id.layoutPlayer)
-                  layoutDetalhe = findViewById(R.id.layoutDetalhe)
-                  layoutPreview = findViewById(R.id.layoutPreview)
                   txtTituloLista = findViewById(R.id.txtTituloLista)
                   listView = findViewById(R.id.listView)
                   videoView = findViewById(R.id.playerView)
-                  previewView = findViewById(R.id.previewView)
-                  txtEpgPreview = findViewById(R.id.txtEpgPreview)
-                  imgCapa = findViewById(R.id.imgCapa)
-                  txtTituloFilme = findViewById(R.id.txtTituloFilme)
-                  txtSinopse = findViewById(R.id.txtSinopse)
                   edtBusca = findViewById(R.id.edtBusca)
                   val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
                   var id = prefs.getString("device_id", null)
@@ -142,10 +125,6 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   findViewById<Button>(R.id.btnSair).setOnClickListener { voltarParaAtivacao() }
                   findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
                   findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { minimizarPlayer() }
-                  findViewById<Button>(R.id.btnVoltarDetalhe).setOnClickListener { layoutDetalhe.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
-                  findViewById<Button>(R.id.btnPlayFilme).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
-                  findViewById<Button>(R.id.btnTelaCheia).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
-                  findViewById<Button>(R.id.btnPlayPreview).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
                   findViewById<Button>(R.id.btnLimparBusca).setOnClickListener { edtBusca.setText("") }
                   edtBusca.addTextChangedListener(object : android.text.TextWatcher {
                       override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -154,30 +133,22 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   })
                   listView.setOnItemClickListener { _, _, pos, _ ->
                       if (txtTituloLista.text.toString().startsWith("Categorias") || currentTipo=="AJUSTES") {
-                          if(currentTipo=="AJUSTES"){
-                              if(pos==5){
-                                  prefs.edit().remove("playlist_url").apply()
-                                  liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
-                                  liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear()
-                                  Toast.makeText(this,"Cache limpo",Toast.LENGTH_SHORT).show()
-                                  voltarParaAtivacao()
-                              }
-                              return@setOnItemClickListener
-                          }
+                          if(currentTipo=="AJUSTES" && pos==4){ prefs.edit().remove("playlist_url").apply(); voltarParaAtivacao(); return@setOnItemClickListener }
                           if(pos < currentGruposKeys.size) abrirCanaisDoGrupo(currentGruposKeys[pos])
                       } else {
                           val lista = getListaVisivel()
-                          if(pos >= lista.size) return@setOnItemClickListener
-                          val canal = lista[pos]
-                          if(currentTipo=="LIVE") mostrarPreview(canal) else mostrarDetalheFilme(canal)
+                          if(pos < lista.size) playFullscreen(lista[pos])
                       }
                   }
                   if(lastPlaylistUrl.isNotEmpty()){ abrirMenuDireto(); carregarM3U(lastPlaylistUrl) }
               }
               fun getAttr(line: String, attr: String): String {
-                  val idx = line.indexOf(attr + "="); if(idx==-1) return ""
-                  var start = idx + attr.length + 1; if(start >= line.length) return ""
-                  val q = line[start]; if(q == '"' || q.code == 39){ start++; val end = line.indexOf(q, start); if(end!=-1) return line.substring(start, end) }
+                  val idx = line.indexOf(attr + "=")
+                  if(idx==-1) return ""
+                  var start = idx + attr.length + 1
+                  if(start >= line.length) return ""
+                  val q = line[start]
+                  if(q == '"' || q.code == 39){ start++; val end = line.indexOf(q, start); if(end!=-1) return line.substring(start, end) }
                   else { var end = line.indexOf(' ', start); if(end==-1) end=line.length; return line.substring(start, end) }
                   return ""
               }
@@ -213,13 +184,13 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   return listaCanaisFull.filter{ it.nome.lowercase().contains(q) }
               }
               fun voltarParaAtivacao(){
-                  layoutMenu.visibility = View.GONE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutDetalhe.visibility = View.GONE; layoutAtivacao.visibility = View.VISIBLE
-                  videoView.stopPlayback(); previewView.stopPlayback()
+                  layoutMenu.visibility = View.GONE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutAtivacao.visibility = View.VISIBLE
+                  videoView.stopPlayback()
                   window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
               }
               fun abrirMenuDireto(){
-                  layoutAtivacao.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutDetalhe.visibility = View.GONE
+                  layoutAtivacao.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE
                   txtStatusMenu.text = "LIVE:" + liveGrupos.values.sumOf{it.size} + " FIL:" + moviesGrupos.values.sumOf{it.size} + " SER:" + seriesGrupos.values.sumOf{it.size}
               }
               fun verificarAtivacao(){
@@ -235,10 +206,8 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                                   val json = JSONObject(resp)
                                   if(json.optString("status")=="active"){
                                       var pl = json.optString("playlist",""); if(pl.isEmpty()) pl = json.optString("url","")
-                                      if(pl.isNotEmpty()){
-                                          lastPlaylistUrl = pl; getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
-                                          abrirMenuDireto(); carregarM3U(pl)
-                                      } else { txtStatus.text="Ativo sem link"; abrirMenuDireto() }
+                                      if(pl.isNotEmpty()){ lastPlaylistUrl = pl; getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply(); abrirMenuDireto(); carregarM3U(pl) }
+                                      else { txtStatus.text="Ativo sem link"; abrirMenuDireto() }
                                   } else { txtStatus.text="Nao ativo" }
                               }catch(e:Exception){ txtStatus.text="Erro JSON" }
                           }
@@ -254,40 +223,35 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                           val conn = URL(link).openConnection() as HttpURLConnection
                           conn.connectTimeout=20000; conn.readTimeout=60000
                           conn.setRequestProperty("User-Agent","VLC")
-                          conn.instanceFollowRedirects=true
                           if(conn.responseCode!=200) throw Exception("HTTP " + conn.responseCode)
                           reader = conn.inputStream.bufferedReader()
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                           liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear()
-                          var nome="Canal"; var grupo="Sem Categoria"; var logo=""
+                          var nome="Canal"; var grupo="Sem Categoria"
                           var line: String?
                           while(true){
                               try{ line = reader.readLine() ?: break } catch(e:Exception){ break }
                               val t = line!!.trim(); if(t.isEmpty()) continue
                               if(t.startsWith("#EXTINF")){
-                                  try{
-                                      nome = if(t.contains(",")) t.substringAfterLast(",").trim() else "Canal"
-                                      grupo = getAttr(t, "group-title"); if(grupo.isEmpty()) grupo="Sem Categoria"
-                                      logo = getAttr(t, "tvg-logo")
-                                  }catch(e:Exception){}
+                                  try{ nome = if(t.contains(",")) t.substringAfterLast(",").trim() else "Canal"; grupo = getAttr(t, "group-title"); if(grupo.isEmpty()) grupo="Sem Categoria" }catch(e:Exception){}
                               } else if(t.startsWith("http")){
                                   total++
                                   val gl = grupo.lowercase(); val ll = t.lowercase()
                                   val tipo = when{ gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"; gl.contains("serie") || ll.contains("/series/") -> "SERIES"; else -> "LIVE" }
-                                  val canal = Canal(nome, t, grupo, tipo, logo)
+                                  val canal = Canal(nome, t, grupo, tipo)
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
                                   if(!mapa.containsKey(grupo)){ mapa[grupo]=mutableListOf(); order.add(grupo) }
                                   mapa[grupo]?.add(canal)
-                                  if(total % 500 == 0){ val tt=total; runOnUiThread{ txtStatusMenu.text="Carregando a lista... " + tt + " canais..." } }
-                                  nome="Canal"; grupo="Sem Categoria"; logo=""
+                                  if(total % 500 == 0){ val tt=total; runOnUiThread{ txtStatusMenu.text="Carregando a lista... " + tt } }
+                                  nome="Canal"; grupo="Sem Categoria"
                               }
                           }
                           reader.close()
                           runOnUiThread{
                               val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                               txtStatusMenu.text="OK! LIVE:" + lc + " FIL:" + mc + " SER:" + sc + " TOTAL:" + total + " (TUDO)"
-                              txtStatus.text="TUDO " + total + " canais"
+                              txtStatus.text="TUDO " + total
                               Toast.makeText(this, "TUDO " + total, Toast.LENGTH_LONG).show()
                               if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
                           }
@@ -303,7 +267,7 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   listaCatsFull = currentGruposKeys
                   txtTituloLista.text="Categorias - " + currentGruposKeys.size + " (TUDO)"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{it + " (" + (mapa[it]?.size ?: 0) + ")"})
-                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
+                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
               fun abrirCanaisDoGrupo(g: String){
                   currentGrupoSelecionado=g; edtBusca.setText("")
@@ -312,46 +276,28 @@ cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
                   txtTituloLista.text=g + " - " + lista.size + " (TUDO)"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
               }
-              fun mostrarPreview(canal: Canal){
-                  currentCanalPreview = canal; layoutPreview.visibility = View.VISIBLE
-                  txtEpgPreview.text = canal.nome + "
-Grupo: " + canal.grupo
-                  try{ previewView.setVideoPath(canal.url); previewView.start() }catch(e:Exception){}
-              }
-              fun mostrarDetalheFilme(canal: Canal){
-                  currentCanalPreview = canal; layoutLista.visibility=View.GONE; layoutDetalhe.visibility=View.VISIBLE
-                  txtTituloFilme.text = canal.nome; txtSinopse.text = "Sinopse PT: " + canal.nome + " - Grupo " + canal.grupo
-                  if(canal.logo.isNotEmpty()){
-                      thread{ try{ val conn = URL(canal.logo).openConnection() as HttpURLConnection; conn.connectTimeout=8000; val bmp = BitmapFactory.decodeStream(conn.inputStream); runOnUiThread{ imgCapa.setImageBitmap(bmp) } }catch(e:Exception){} }
-                  }
-              }
               fun playFullscreen(canal: Canal){
-                  currentCanalPreview = canal
-                  layoutLista.visibility=View.GONE; layoutDetalhe.visibility=View.GONE; layoutMenu.visibility=View.GONE; layoutPreview.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE
+                  layoutLista.visibility=View.GONE; layoutMenu.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE
                   window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
-                  findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.GONE
                   findViewById<TextView>(R.id.txtTocando).text=canal.nome
                   try{ videoView.setVideoPath(canal.url); videoView.start() }catch(e:Exception){}
               }
               fun minimizarPlayer(){
                   videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-                  findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.VISIBLE
-                  layoutPlayer.visibility=View.GONE
-                  if(currentTipo=="LIVE"){ layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.VISIBLE } else { layoutDetalhe.visibility=View.VISIBLE }
+                  layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
               fun abrirAjustes(){
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
-                  currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"URL " + lastPlaylistUrl.take(50),"Limpar e voltar")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v43"
+                  currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"Limpar cache")
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v44"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
-                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
+                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
               fun voltar(){
                   if(layoutPlayer.visibility==View.VISIBLE){ minimizarPlayer(); return }
-                  if(layoutDetalhe.visibility==View.VISIBLE){ layoutDetalhe.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; return }
                   if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return }
               }
               override fun onBackPressed() { voltar() }
@@ -396,28 +342,7 @@ Grupo: " + canal.grupo
                       <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="Buscar canal, filme, serie..." android:textColor="#FFF" android:hintTextColor="#888" android:background="#0F2240" android:padding="8dp"/>
                       <Button android:id="@+id/btnLimparBusca" android:layout_width="wrap_content" android:layout_height="40dp" android:text="X"/>
                   </LinearLayout>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="6dp">
-                      <ListView android:id="@+id/listView" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="#0F2240"/>
-                      <LinearLayout android:id="@+id/layoutPreview" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:visibility="gone" android:background="#111" android:padding="6dp">
-                          <VideoView android:id="@+id/previewView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
-                          <TextView android:id="@+id/txtEpgPreview" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="EPG" android:textColor="#FFF" android:textSize="11sp" android:padding="4dp"/>
-                          <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                              <Button android:id="@+id/btnPlayPreview" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="Assistir" android:backgroundTint="#00FF88" android:layout_margin="2dp"/>
-                              <Button android:id="@+id/btnTelaCheia" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="Tela Cheia" android:layout_margin="2dp"/>
-                          </LinearLayout>
-                      </LinearLayout>
-                  </LinearLayout>
-              </LinearLayout>
-              <LinearLayout android:id="@+id/layoutDetalhe" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:visibility="gone" android:background="#0A1931" android:padding="12dp">
-                  <ImageView android:id="@+id/imgCapa" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:scaleType="centerCrop" android:background="#222"/>
-                  <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:padding="12dp">
-                      <Button android:id="@+id/btnVoltarDetalhe" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Voltar"/>
-                      <TextView android:id="@+id/txtTituloFilme" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Titulo" android:textColor="#FFF" android:textSize="20sp" android:textStyle="bold" android:layout_marginTop="8dp"/>
-                      <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="8dp">
-                          <TextView android:id="@+id/txtSinopse" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Sinopse..." android:textColor="#CCC" android:textSize="13sp"/>
-                      </ScrollView>
-                      <Button android:id="@+id/btnPlayFilme" android:layout_width="match_parent" android:layout_height="50dp" android:text="Assistir Filme/Serie" android:backgroundTint="#00FF88" android:textColor="#000" android:layout_marginTop="8dp"/>
-                  </LinearLayout>
+                  <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:background="#0F2240" android:layout_marginTop="6dp"/>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutPlayer" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:background="#000">
                   <LinearLayout android:id="@+id/topBarPlayer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
@@ -444,45 +369,27 @@ Grupo: " + canal.grupo
           android {
               namespace 'com.superplay.app'
               compileSdk 34
-              defaultConfig {
-                  applicationId "com.superplay.app"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 43
-                  versionName "43.0-SEM-EXOPLAYER"
-              }
+              defaultConfig { applicationId "com.superplay.app"; minSdk 24; targetSdk 34; versionCode 44; versionName "44.0-FIX-YAML-VERDE" }
               buildTypes { release { minifyEnabled false } }
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              kotlinOptions { jvmTarget = '17' }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
           GRADLE
           cat > build.gradle <<'GRADLE'
           buildscript {
               ext.kotlin_version = '1.9.10'
               repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
+              dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
           }
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
           echo "include ':app'" > settings.gradle
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.7
-          cache-disabled: true
-      - name: Build APK v43 SEM EXOPLAYER
+        with: { gradle-version: 8.7, cache-disabled: true }
+      - name: Build APK v44 FIX YAML VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v43-SEM-EXOPLAYER, path: "**/*.apk" }
+        with: { name: SuperPlay-v44-FIX-YAML-VERDE, path: "**/*.apk" }
