@@ -21,7 +21,7 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Criar projeto v54 DEBUG COM LOG REAL
+      - name: Criar projeto v55 V22 PURO FIX ASPAS
         run: |
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -107,62 +107,156 @@ jobs:
                   }
                   if (lastUrl.isNotEmpty()) { abrirMenu(); carregar(lastUrl) }
               }
-              fun voltarAtivacao() { layoutMenu.visibility=View.GONE; layoutLista.visibility=View.GONE; layoutPlayer.visibility=View.GONE; layoutAtivacao.visibility=View.VISIBLE; videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
-              fun abrirMenu() { layoutAtivacao.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; layoutLista.visibility=View.GONE; layoutPlayer.visibility=View.GONE; txtStatusMenu.text="TOTAL:"+grupos.values.sumOf{it.size} }
+              fun voltarAtivacao() {
+                  layoutMenu.visibility = View.GONE
+                  layoutLista.visibility = View.GONE
+                  layoutPlayer.visibility = View.GONE
+                  layoutAtivacao.visibility = View.VISIBLE
+                  videoView.stopPlayback()
+                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+              }
+              fun abrirMenu() {
+                  layoutAtivacao.visibility = View.GONE
+                  layoutMenu.visibility = View.VISIBLE
+                  layoutLista.visibility = View.GONE
+                  layoutPlayer.visibility = View.GONE
+                  txtStatusMenu.text = "TOTAL:" + grupos.values.sumOf { it.size }
+              }
               fun verificar() {
-                  txtStatus.text="Verificando..."
+                  txtStatus.text = "Verificando..."
                   thread {
                       try {
                           val u = "https://supplay.online/api/check.php?device_id=$deviceId"
                           val co = URL(u).openConnection() as HttpURLConnection
-                          co.connectTimeout=12000; co.readTimeout=12000
-                          val r = co.inputStream.bufferedReader().use{it.readText()}
+                          co.connectTimeout = 12000
+                          co.readTimeout = 12000
+                          val r = co.inputStream.bufferedReader().use { it.readText() }
                           runOnUiThread {
                               try {
                                   val j = JSONObject(r)
-                                  if (j.optString("status")=="active") {
-                                      var pl = j.optString("playlist","")
-                                      if (pl.isEmpty()) pl=j.optString("url","")
-                                      if (pl.isNotEmpty()) { lastUrl=pl; getSharedPreferences("superplay",MODE_PRIVATE).edit().putString("playlist_url",pl).apply(); abrirMenu(); carregar(pl) }
-                                      else { txtStatus.text="Ativo"; abrirMenu() }
-                                  } else { txtStatus.text="Nao ativo" }
-                              } catch (e: Exception) { txtStatus.text="Erro JSON" }
+                                  if (j.optString("status") == "active") {
+                                      var pl = j.optString("playlist", "")
+                                      if (pl.isEmpty()) pl = j.optString("url", "")
+                                      if (pl.isNotEmpty()) {
+                                          lastUrl = pl
+                                          getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
+                                          abrirMenu()
+                                          carregar(pl)
+                                      } else {
+                                          txtStatus.text = "Ativo"
+                                          abrirMenu()
+                                      }
+                                  } else {
+                                      txtStatus.text = "Nao ativo"
+                                  }
+                              } catch (e: Exception) {
+                                  txtStatus.text = "Erro JSON"
+                              }
                           }
-                      } catch (e: Exception) { runOnUiThread { txtStatus.text="Erro rede" } }
+                      } catch (e: Exception) {
+                          runOnUiThread { txtStatus.text = "Erro rede" }
+                      }
                   }
               }
               fun carregar(link: String) {
                   if (link.isBlank()) return
-                  txtStatusMenu.text="Carregando..."
+                  txtStatusMenu.text = "Carregando..."
                   thread {
-                      var tot=0; var rd: java.io.BufferedReader? = null
+                      var tot = 0
+                      var rd: java.io.BufferedReader? = null
                       try {
                           val co = URL(link).openConnection() as HttpURLConnection
-                          co.connectTimeout=20000; co.readTimeout=60000
-                          co.setRequestProperty("User-Agent","VLC")
-                          if (co.responseCode!=200) throw Exception("HTTP "+co.responseCode)
+                          co.connectTimeout = 20000
+                          co.readTimeout = 60000
+                          co.setRequestProperty("User-Agent", "VLC")
+                          if (co.responseCode != 200) throw Exception("HTTP " + co.responseCode)
                           rd = co.inputStream.bufferedReader()
-                          grupos.clear(); order.clear()
-                          var nome="Canal"; var gp="Sem Categoria"; var ln: String?
+                          grupos.clear()
+                          order.clear()
+                          var nome = "Canal"
+                          var gp = "Sem Categoria"
+                          var ln: String?
                           while (true) {
-                              try { ln = rd.readLine() ?: break } catch (e: Exception) { break }
-                              val t = ln!!.trim(); if (t.isEmpty()) continue
+                              try {
+                                  ln = rd.readLine() ?: break
+                              } catch (e: Exception) {
+                                  break
+                              }
+                              val t = ln!!.trim()
+                              if (t.isEmpty()) continue
                               if (t.startsWith("#EXTINF")) {
-                                  try { nome=if (t.contains(",")) t.substringAfterLast(",").trim() else "Canal"; var g=t.substringAfter("group-title=\"", ""); if (g!=t) { g=g.substringBefore("\""); gp=g } } catch (e: Exception) {}
+                                  try {
+                                      nome = if (t.contains(",")) t.substringAfterLast(",").trim() else "Canal"
+                                      var g = t.substringAfter("group-title=\"", "")
+                                      if (g != t) {
+                                          g = g.substringBefore("\"")
+                                          if (g.isNotEmpty()) gp = g
+                                      }
+                                  } catch (e: Exception) {}
                               } else if (t.startsWith("http")) {
-                                  tot++; val canal=Canal(nome,t,gp); if (!grupos.containsKey(gp)) { grupos[gp]=mutableListOf(); order.add(gp) }; grupos[gp]?.add(canal); nome="Canal"; gp="Sem Categoria"
+                                  tot++
+                                  val canal = Canal(nome, t, gp)
+                                  if (!grupos.containsKey(gp)) {
+                                      grupos[gp] = mutableListOf()
+                                      order.add(gp)
+                                  }
+                                  grupos[gp]?.add(canal)
+                                  nome = "Canal"
+                                  gp = "Sem Categoria"
                               }
                           }
                           rd.close()
-                          runOnUiThread { txtStatusMenu.text="OK TOTAL:"+tot; Toast.makeText(this,"TOTAL "+tot,Toast.LENGTH_LONG).show() }
-                      } catch (e: Exception) { try { rd?.close() } catch (ex: Exception) {}; runOnUiThread { txtStatusMenu.text="Erro: "+e.message } }
+                          runOnUiThread {
+                              txtStatusMenu.text = "OK TOTAL:" + tot
+                              Toast.makeText(this, "TOTAL " + tot, Toast.LENGTH_LONG).show()
+                          }
+                      } catch (e: Exception) {
+                          try { rd?.close() } catch (ex: Exception) {}
+                          runOnUiThread { txtStatusMenu.text = "Erro: " + e.message }
+                      }
                   }
               }
-              fun abrirCats() { if (grupos.isEmpty()) { Toast.makeText(this,"Vazio",Toast.LENGTH_LONG).show(); return }; currentKeys=if (order.isNotEmpty()) order else grupos.keys.toList(); txtTituloLista.text="Categorias - "+currentKeys.size; listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentKeys.map{it+" ("+(grupos[it]?.size?:0)+")"}); layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
-              fun abrirGrupo(g: String) { val ls=grupos[g]?:emptyList(); listaFull=ls; txtTituloLista.text=g+" - "+ls.size; listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, ls.map{it.nome}) }
-              fun play(c: Canal) { layoutLista.visibility=View.GONE; layoutMenu.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE; window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); window.decorView.systemUiVisibility=(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION); findViewById<TextView>(R.id.txtTocando).text=c.nome; try { videoView.setVideoPath(c.url); videoView.start() } catch (e: Exception) {} }
-              fun minimizar() { videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
-              fun voltar() { if (layoutPlayer.visibility==View.VISIBLE) { minimizar(); return }; if (layoutLista.visibility==View.VISIBLE) { layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return } }
+              fun abrirCats() {
+                  if (grupos.isEmpty()) {
+                      Toast.makeText(this, "Vazio", Toast.LENGTH_LONG).show()
+                      return
+                  }
+                  currentKeys = if (order.isNotEmpty()) order else grupos.keys.toList()
+                  txtTituloLista.text = "Categorias - " + currentKeys.size
+                  val lista = currentKeys.map { it + " (" + (grupos[it]?.size ?: 0) + ")" }
+                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista)
+                  layoutMenu.visibility = View.GONE
+                  layoutLista.visibility = View.VISIBLE
+              }
+              fun abrirGrupo(g: String) {
+                  val ls = grupos[g] ?: emptyList()
+                  listaFull = ls
+                  txtTituloLista.text = g + " - " + ls.size
+                  val lista = ls.map { it.nome }
+                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista)
+              }
+              fun play(c: Canal) {
+                  layoutLista.visibility = View.GONE
+                  layoutMenu.visibility = View.GONE
+                  layoutPlayer.visibility = View.VISIBLE
+                  window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
+                  findViewById<TextView>(R.id.txtTocando).text = c.nome
+                  try {
+                      videoView.setVideoPath(c.url)
+                      videoView.start()
+                  } catch (e: Exception) {}
+              }
+              fun minimizar() {
+                  videoView.stopPlayback()
+                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  layoutPlayer.visibility = View.GONE
+                  layoutLista.visibility = View.VISIBLE
+              }
+              fun voltar() {
+                  if (layoutPlayer.visibility == View.VISIBLE) { minimizar(); return }
+                  if (layoutLista.visibility == View.VISIBLE) { layoutLista.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; return }
+              }
               override fun onBackPressed() { voltar() }
           }
           KT
@@ -216,7 +310,7 @@ jobs:
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
-          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 54; versionName "54.0-DEBUG" }; buildTypes { release { minifyEnabled false } } }
+          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 55; versionName "55.0-V22-FIX" }; buildTypes { release { minifyEnabled false } } }
           dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10' }
           GRADLE
           cat > build.gradle <<'GRADLE'
@@ -226,15 +320,10 @@ jobs:
           echo "include ':app'" > settings.gradle
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.4, cache-disabled: true }
-      - name: Build APK v54 DEBUG LOG
+      - name: Build APK v55 V22 FIX VERDE REAL
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
-          gradle assembleDebug --no-daemon --stacktrace --info > /tmp/build.log 2>&1 || true
-          echo "=== ERRO REAL ==="
-          grep -n "error\|FAILED\|What went wrong\|Task :app" /tmp/build.log | head -n 100
-          echo "=== LOG COMPLETO ULTIMAS 200 LINHAS ==="
-          tail -n 200 /tmp/build.log
           gradle assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v54-DEBUG, path: "app/build/outputs/apk/debug/*.apk" }
+        with: { name: SuperPlay-v55-V22-FIX-VERDE-REAL, path: "app/build/outputs/apk/debug/*.apk" }
