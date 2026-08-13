@@ -4,25 +4,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
-      - name: Setup Android SDK 34
+      - uses: android-actions/setup-android@v3
+      - name: Criar projeto v48 VOLTA V28 QUE DEU VERDE
         run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
-          unzip -q tools.zip
-          mv cmdline-tools latest
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          yes | sdkmanager --licenses || true
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Criar projeto v47 BASE V28 VERDE
-        run: |
-          export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
@@ -35,7 +22,6 @@ jobs:
           XML
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
-          android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2g
           PROP
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
@@ -134,154 +120,18 @@ jobs:
                   }
                   if(lastPlaylistUrl.isNotEmpty()){ abrirMenuDireto(); carregarM3U(lastPlaylistUrl) }
               }
-              fun getAttr(line: String, attr: String): String {
-                  val idx = line.indexOf(attr + "="); if(idx==-1) return ""
-                  var start = idx + attr.length + 1; if(start >= line.length) return ""
-                  val q = line[start]; if(q == '"' || q.code == 39){ start++; val end = line.indexOf(q, start); if(end!=-1) return line.substring(start, end) }
-                  else { var end = line.indexOf(' ', start); if(end==-1) end=line.length; return line.substring(start, end) }
-                  return ""
-              }
-              fun filtrar(query: String){
-                  val q = query.trim().lowercase()
-                  if(q.isEmpty()){
-                      if(txtTituloLista.text.toString().startsWith("Categorias")){
-                          currentGruposKeys = listaCatsFull
-                          val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                          listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{it + " (" + (mapa[it]?.size ?: 0) + ")"})
-                          txtTituloLista.text = "Categorias - " + currentGruposKeys.size + " (TUDO)"
-                      } else {
-                          listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, listaCanaisFull.map{it.nome})
-                          txtTituloLista.text = currentGrupoSelecionado + " - " + listaCanaisFull.size + " (TUDO)"
-                      }
-                      return
-                  }
-                  if(txtTituloLista.text.toString().startsWith("Categorias")){
-                      val filtrado = listaCatsFull.filter{ it.lowercase().contains(q) }
-                      currentGruposKeys = filtrado
-                      val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                      listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it + " (" + (mapa[it]?.size ?: 0) + ")"})
-                      txtTituloLista.text = "Busca: " + query + " - " + filtrado.size
-                  } else {
-                      val filtrado = listaCanaisFull.filter{ it.nome.lowercase().contains(q) }
-                      listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it.nome})
-                      txtTituloLista.text = "Busca: " + query + " - " + filtrado.size
-                  }
-              }
-              fun getListaVisivel(): List<Canal>{
-                  val q = edtBusca.text.toString().trim().lowercase()
-                  if(q.isEmpty()) return listaCanaisFull
-                  return listaCanaisFull.filter{ it.nome.lowercase().contains(q) }
-              }
-              fun voltarParaAtivacao(){
-                  layoutMenu.visibility = View.GONE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutAtivacao.visibility = View.VISIBLE
-                  videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                  window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-              }
-              fun abrirMenuDireto(){
-                  layoutAtivacao.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE
-                  txtStatusMenu.text = "LIVE:" + liveGrupos.values.sumOf{it.size} + " FIL:" + moviesGrupos.values.sumOf{it.size} + " SER:" + seriesGrupos.values.sumOf{it.size}
-              }
-              fun verificarAtivacao(){
-                  txtStatus.text = "Verificando..."
-                  thread{
-                      try{
-                          val url = "https://supplay.online/api/check.php?device_id=$deviceId"
-                          val conn = URL(url).openConnection() as HttpURLConnection
-                          conn.connectTimeout=12000; conn.readTimeout=12000
-                          val resp = conn.inputStream.bufferedReader().use{it.readText()}
-                          runOnUiThread{
-                              try{
-                                  val json = JSONObject(resp)
-                                  if(json.optString("status")=="active"){
-                                      var pl = json.optString("playlist",""); if(pl.isEmpty()) pl = json.optString("url","")
-                                      if(pl.isNotEmpty()){ lastPlaylistUrl = pl; getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply(); abrirMenuDireto(); carregarM3U(pl) }
-                                      else { txtStatus.text="Ativo sem link"; abrirMenuDireto() }
-                                  } else { txtStatus.text="Nao ativo" }
-                              }catch(e:Exception){ txtStatus.text="Erro JSON" }
-                          }
-                      }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede" } }
-                  }
-              }
-              fun carregarM3U(link: String){
-                  if(link.isBlank()) return
-                  txtStatusMenu.text = "Carregando a lista... aguarde"
-                  thread{
-                      var total=0; var reader: java.io.BufferedReader? = null
-                      try{
-                          val conn = URL(link).openConnection() as HttpURLConnection
-                          conn.connectTimeout=20000; conn.readTimeout=60000
-                          conn.setRequestProperty("User-Agent","VLC")
-                          if(conn.responseCode!=200) throw Exception("HTTP " + conn.responseCode)
-                          reader = conn.inputStream.bufferedReader()
-                          liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
-                          liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear()
-                          var nome="Canal"; var grupo="Sem Categoria"
-                          var line: String?
-                          while(true){
-                              try{ line = reader.readLine() ?: break } catch(e:Exception){ break }
-                              val t = line!!.trim(); if(t.isEmpty()) continue
-                              if(t.startsWith("#EXTINF")){
-                                  try{ nome = if(t.contains(",")) t.substringAfterLast(",").trim() else "Canal"; grupo = getAttr(t, "group-title"); if(grupo.isEmpty()) grupo="Sem Categoria" }catch(e:Exception){}
-                              } else if(t.startsWith("http")){
-                                  total++; val gl = grupo.lowercase(); val ll = t.lowercase()
-                                  val tipo = when{ gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"; gl.contains("serie") || ll.contains("/series/") -> "SERIES"; else -> "LIVE" }
-                                  val canal = Canal(nome, t, grupo, tipo)
-                                  val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                                  val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
-                                  if(!mapa.containsKey(grupo)){ mapa[grupo]=mutableListOf(); order.add(grupo) }
-                                  mapa[grupo]?.add(canal)
-                                  if(total % 500 == 0){ val tt=total; runOnUiThread{ txtStatusMenu.text="Carregando a lista... " + tt } }
-                                  nome="Canal"; grupo="Sem Categoria"
-                              }
-                          }
-                          reader.close()
-                          runOnUiThread{
-                              val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
-                              txtStatusMenu.text="OK! LIVE:" + lc + " FIL:" + mc + " SER:" + sc + " TOTAL:" + total + " (TUDO)"
-                              Toast.makeText(this, "TUDO " + total, Toast.LENGTH_LONG).show()
-                              if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
-                          }
-                      }catch(e:Exception){ try{ reader?.close() } catch(ex:Exception){}; runOnUiThread{ txtStatusMenu.text="Erro: " + e.message } }
-                  }
-              }
-              fun abrirCategorias(tipo: String){
-                  currentTipo=tipo; edtBusca.setText("")
-                  val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                  val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
-                  if(mapa.isEmpty()){ Toast.makeText(this,"Vazio " + tipo,Toast.LENGTH_LONG).show(); return }
-                  currentGruposKeys = if(order.isNotEmpty()) order else mapa.keys.toList()
-                  listaCatsFull = currentGruposKeys
-                  txtTituloLista.text="Categorias - " + currentGruposKeys.size + " (TUDO)"
-                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{it + " (" + (mapa[it]?.size ?: 0) + ")"})
-                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
-              }
-              fun abrirCanaisDoGrupo(g: String){
-                  currentGrupoSelecionado=g; edtBusca.setText("")
-                  val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                  val lista=mapa[g]?: emptyList(); listaCanaisFull = lista
-                  txtTituloLista.text=g + " - " + lista.size + " (TUDO)"
-                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
-              }
-              fun playFullscreen(canal: Canal){
-                  layoutLista.visibility=View.GONE; layoutMenu.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE
-                  window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                  window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-                  findViewById<TextView>(R.id.txtTocando).text=canal.nome
-                  try{ videoView.setVideoPath(canal.url); videoView.start() }catch(e:Exception){}
-              }
-              fun minimizarPlayer(){
-                  videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                  window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-                  layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
-              }
-              fun abrirAjustes(){
-                  currentTipo="AJUSTES"; edtBusca.setText("")
-                  val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
-                  currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"Limpar cache")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v47"
-                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
-                  layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
-              }
+              fun getAttr(line: String, attr: String): String { val idx = line.indexOf(attr + "="); if(idx==-1) return ""; var start = idx + attr.length + 1; if(start >= line.length) return ""; val q = line[start]; if(q == '"' || q.code == 39){ start++; val end = line.indexOf(q, start); if(end!=-1) return line.substring(start, end) } else { var end = line.indexOf(' ', start); if(end==-1) end=line.length; return line.substring(start, end) }; return "" }
+              fun filtrar(query: String){ val q = query.trim().lowercase(); if(q.isEmpty()){ if(txtTituloLista.text.toString().startsWith("Categorias")){ currentGruposKeys = listaCatsFull; val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{it + " (" + (mapa[it]?.size ?: 0) + ")"}); txtTituloLista.text = "Categorias - " + currentGruposKeys.size + " (TUDO)" } else { listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, listaCanaisFull.map{it.nome}); txtTituloLista.text = currentGrupoSelecionado + " - " + listaCanaisFull.size + " (TUDO)" }; return }; if(txtTituloLista.text.toString().startsWith("Categorias")){ val filtrado = listaCatsFull.filter{ it.lowercase().contains(q) }; currentGruposKeys = filtrado; val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it + " (" + (mapa[it]?.size ?: 0) + ")"}); txtTituloLista.text = "Busca: " + query + " - " + filtrado.size } else { val filtrado = listaCanaisFull.filter{ it.nome.lowercase().contains(q) }; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it.nome}); txtTituloLista.text = "Busca: " + query + " - " + filtrado.size } }
+              fun getListaVisivel(): List<Canal>{ val q = edtBusca.text.toString().trim().lowercase(); if(q.isEmpty()) return listaCanaisFull; return listaCanaisFull.filter{ it.nome.lowercase().contains(q) } }
+              fun voltarParaAtivacao(){ layoutMenu.visibility = View.GONE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutAtivacao.visibility = View.VISIBLE; videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE }
+              fun abrirMenuDireto(){ layoutAtivacao.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; txtStatusMenu.text = "LIVE:" + liveGrupos.values.sumOf{it.size} + " FIL:" + moviesGrupos.values.sumOf{it.size} + " SER:" + seriesGrupos.values.sumOf{it.size} }
+              fun verificarAtivacao(){ txtStatus.text = "Verificando..."; thread{ try{ val url = "https://supplay.online/api/check.php?device_id=$deviceId"; val conn = URL(url).openConnection() as HttpURLConnection; conn.connectTimeout=12000; conn.readTimeout=12000; val resp = conn.inputStream.bufferedReader().use{it.readText()}; runOnUiThread{ try{ val json = JSONObject(resp); if(json.optString("status")=="active"){ var pl = json.optString("playlist",""); if(pl.isEmpty()) pl = json.optString("url",""); if(pl.isNotEmpty()){ lastPlaylistUrl = pl; getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply(); abrirMenuDireto(); carregarM3U(pl) } else { txtStatus.text="Ativo sem link"; abrirMenuDireto() } } else { txtStatus.text="Nao ativo" } }catch(e:Exception){ txtStatus.text="Erro JSON" } } }catch(e:Exception){ runOnUiThread{ txtStatus.text="Erro rede" } } } }
+              fun carregarM3U(link: String){ if(link.isBlank()) return; txtStatusMenu.text = "Carregando a lista... aguarde"; thread{ var total=0; var reader: java.io.BufferedReader? = null; try{ val conn = URL(link).openConnection() as HttpURLConnection; conn.connectTimeout=20000; conn.readTimeout=60000; conn.setRequestProperty("User-Agent","VLC"); if(conn.responseCode!=200) throw Exception("HTTP " + conn.responseCode); reader = conn.inputStream.bufferedReader(); liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear(); liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear(); var nome="Canal"; var grupo="Sem Categoria"; var line: String?; while(true){ try{ line = reader.readLine() ?: break } catch(e:Exception){ break }; val t = line!!.trim(); if(t.isEmpty()) continue; if(t.startsWith("#EXTINF")){ try{ nome = if(t.contains(",")) t.substringAfterLast(",").trim() else "Canal"; grupo = getAttr(t, "group-title"); if(grupo.isEmpty()) grupo="Sem Categoria" }catch(e:Exception){} } else if(t.startsWith("http")){ total++; val gl = grupo.lowercase(); val ll = t.lowercase(); val tipo = when{ gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"; gl.contains("serie") || ll.contains("/series/") -> "SERIES"; else -> "LIVE" }; val canal = Canal(nome, t, grupo, tipo); val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}; val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}; if(!mapa.containsKey(grupo)){ mapa[grupo]=mutableListOf(); order.add(grupo) }; mapa[grupo]?.add(canal); if(total % 500 == 0){ val tt=total; runOnUiThread{ txtStatusMenu.text="Carregando a lista... " + tt } }; nome="Canal"; grupo="Sem Categoria" } }; reader.close(); runOnUiThread{ val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}; txtStatusMenu.text="OK! LIVE:" + lc + " FIL:" + mc + " SER:" + sc + " TOTAL:" + total + " (TUDO)"; Toast.makeText(this, "TUDO " + total, Toast.LENGTH_LONG).show(); if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto() } }catch(e:Exception){ try{ reader?.close() } catch(ex:Exception){}; runOnUiThread{ txtStatusMenu.text="Erro: " + e.message } } } }
+              fun abrirCategorias(tipo: String){ currentTipo=tipo; edtBusca.setText(""); val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}; val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}; if(mapa.isEmpty()){ Toast.makeText(this,"Vazio " + tipo,Toast.LENGTH_LONG).show(); return }; currentGruposKeys = if(order.isNotEmpty()) order else mapa.keys.toList(); listaCatsFull = currentGruposKeys; txtTituloLista.text="Categorias - " + currentGruposKeys.size + " (TUDO)"; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{it + " (" + (mapa[it]?.size ?: 0) + ")"}); layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
+              fun abrirCanaisDoGrupo(g: String){ currentGrupoSelecionado=g; edtBusca.setText(""); val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}; val lista=mapa[g]?: emptyList(); listaCanaisFull = lista; txtTituloLista.text=g + " - " + lista.size + " (TUDO)"; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome}) }
+              fun playFullscreen(canal: Canal){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.GONE; layoutPlayer.visibility=View.VISIBLE; window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION); findViewById<TextView>(R.id.txtTocando).text=canal.nome; try{ videoView.setVideoPath(canal.url); videoView.start() }catch(e:Exception){} }
+              fun minimizarPlayer(){ videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE; layoutPlayer.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
+              fun abrirAjustes(){ currentTipo="AJUSTES"; edtBusca.setText(""); val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}; currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"Limpar cache"); listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v48"; listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys); layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
               fun voltar(){ if(layoutPlayer.visibility==View.VISIBLE){ minimizarPlayer(); return }; if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return } }
               override fun onBackPressed() { voltar() }
           }
@@ -341,27 +191,30 @@ jobs:
           </manifest>
           XML
           cat > app/build.gradle <<'GRADLE'
-          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+          apply plugin: 'com.android.application'
+          apply plugin: 'org.jetbrains.kotlin.android'
           android {
               namespace 'com.superplay.app'
               compileSdk 34
-              defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 47; versionName "47.0-V28-BASE-VERDE" }
+              defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 48; versionName "48.0-V28-REAL" }
               buildTypes { release { minifyEnabled false } }
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
           }
           dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10' }
           GRADLE
           cat > build.gradle <<'GRADLE'
-          plugins { id 'com.android.application' version '8.2.0' apply false; id 'org.jetbrains.kotlin.android' version '1.9.10' apply false }
+          buildscript {
+              ext.kotlin_version = '1.9.10'
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.4'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
           GRADLE
           echo "include ':app'" > settings.gradle
-      - uses: gradle/actions/setup-gradle@v4
-        with: { gradle-version: 8.7 }
-      - name: Build APK v47 V28 BASE VERDE REAL
+      - uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: 8.4 }
+      - name: Build APK v48 VOLTA V28 VERDE
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --stacktrace
           ls -lh app/build/outputs/apk/debug/
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v47-V28-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
+        with: { name: SuperPlay-v48-V28-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
