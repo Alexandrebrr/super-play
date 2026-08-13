@@ -20,8 +20,7 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-          cat $GITHUB_WORKSPACE/local.properties
-      - name: Super Play v46 VERDE REAL COM APK
+      - name: Criar projeto v47 BASE V28 VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
@@ -37,6 +36,7 @@ jobs:
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
           android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2g
           PROP
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
@@ -278,7 +278,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"Limpar cache")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v46"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v47"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE
               }
@@ -291,9 +291,9 @@ jobs:
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#0A1931">
               <LinearLayout android:id="@+id/layoutAtivacao" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center" android:padding="20dp">
                   <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                      <TextView android:text="Super Play" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFF" android:textSize="28sp"/>
+                      <TextView android:text="Super Play" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="28sp"/>
                       <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX" android:textColor="#00FF88" android:textSize="24sp"/>
-                      <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Carregando a lista..." android:textColor="#888" android:gravity="center"/>
+                      <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Status" android:textColor="#888888" android:gravity="center"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
                       <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="48dp" android:text="COPIAR ID"/>
@@ -313,7 +313,7 @@ jobs:
               <LinearLayout android:id="@+id/layoutLista" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:padding="8dp">
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                       <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Voltar"/>
-                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFF" android:gravity="center"/>
+                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:textColor="#FFFFFF" android:gravity="center"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="4dp" android:layout_marginTop="6dp">
                       <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="Buscar canal, filme, serie..."/>
@@ -341,30 +341,27 @@ jobs:
           </manifest>
           XML
           cat > app/build.gradle <<'GRADLE'
-          apply plugin: 'com.android.application'
-          apply plugin: 'org.jetbrains.kotlin.android'
+          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
           android {
               namespace 'com.superplay.app'
               compileSdk 34
-              defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 46; versionName "46.0-VERDE-REAL" }
+              defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 47; versionName "47.0-V28-BASE-VERDE" }
               buildTypes { release { minifyEnabled false } }
+              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
           }
+          dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10' }
           GRADLE
           cat > build.gradle <<'GRADLE'
-          buildscript {
-              ext.kotlin_version = '1.9.10'
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.2.0'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
+          plugins { id 'com.android.application' version '8.2.0' apply false; id 'org.jetbrains.kotlin.android' version '1.9.10' apply false }
           GRADLE
           echo "include ':app'" > settings.gradle
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.7 }
-      - name: Build APK v46 VERDE REAL COM APK
+      - name: Build APK v47 V28 BASE VERDE REAL
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --stacktrace
+          ls -lh app/build/outputs/apk/debug/
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v46-VERDE-REAL-APK, path: "**/*.apk" }
+        with: { name: SuperPlay-v47-V28-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
