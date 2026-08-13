@@ -9,7 +9,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Setup Android SDK Manual
+      - name: Setup Android SDK 34 + 33
         run: |
           sudo apt-get update -y
           mkdir -p $HOME/android-sdk/cmdline-tools
@@ -21,9 +21,10 @@ jobs:
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses || true
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          sdkmanager --install "platform-tools" "platforms;android-34" "platforms;android-33" "build-tools;34.0.0" "build-tools;33.0.2"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Super Play v41 TUDO + BUSCA + FULLSCREEN
+          ls $HOME/android-sdk/platforms/
+      - name: Super Play v42 TUDO + BUSCA + FULLSCREEN SDK34
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
@@ -359,7 +360,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"URL " + lastPlaylistUrl.take(50),"Limpar e voltar")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v41"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v42"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
               }
@@ -458,13 +459,13 @@ jobs:
           apply plugin: 'org.jetbrains.kotlin.android'
           android {
               namespace 'com.superplay.app'
-              compileSdk 33
+              compileSdk 34
               defaultConfig {
                   applicationId "com.superplay.app"
                   minSdk 24
-                  targetSdk 33
-                  versionCode 41
-                  versionName "41.0-FULL-BUSCA-VERDE"
+                  targetSdk 34
+                  versionCode 42
+                  versionName "42.0-SDK34-FULL-VERDE"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -496,11 +497,11 @@ jobs:
         with:
           gradle-version: 8.7
           cache-disabled: true
-      - name: Build APK v41 FULL BUSCA VERDE
+      - name: Build APK v42 SDK34 FULL VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.2
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v41-FULL-BUSCA-VERDE, path: "**/*.apk" }
+        with: { name: SuperPlay-v42-SDK34-FULL-VERDE, path: "**/*.apk" }
