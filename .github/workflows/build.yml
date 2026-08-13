@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v31 FULL BUSCA TUDO
+      - name: Super Play v32 FIX BUSCA FULL
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -142,16 +142,20 @@ jobs:
                   findViewById<Button>(R.id.btnPlayFilme).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
                   findViewById<Button>(R.id.btnTelaCheia).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
                   findViewById<Button>(R.id.btnPlayPreview).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
-                  // busca
+                  // busca com filtro
                   edtBusca.addTextChangedListener(object: TextWatcher{
                       override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                       override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                       override fun afterTextChanged(s: Editable?) {
-                          val q = s.toString().trim()
-                          filtrarBusca(q)
+                          try{
+                              val q = s.toString().trim()
+                              filtrarBusca(q)
+                          } catch(e:Exception){}
                       }
                   })
-                  findViewById<Button>(R.id.btnLimparBusca).setOnClickListener { edtBusca.setText("") }
+                  findViewById<Button>(R.id.btnLimparBusca).setOnClickListener { 
+                      try{ edtBusca.setText("") } catch(e:Exception){}
+                  }
                   playerView.setOnClickListener {
                       val top = findViewById<LinearLayout>(R.id.topBarPlayer)
                       if(top.visibility==View.VISIBLE){
@@ -223,11 +227,11 @@ jobs:
                       if(txtTituloLista.text.toString().startsWith("Categorias")){
                           currentGruposKeys = listaCategoriasAtualCompleta
                           val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                          listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
+                          listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
                           txtTituloLista.text="Categorias - ${currentGruposKeys.size} (tudo)"
                       } else {
                           val lista = listaCanaisAtualCompleta
-                          listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
+                          listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, lista.map{it.nome})
                           txtTituloLista.text="$currentGrupoSelecionado - ${lista.size} (tudo)"
                       }
                       return
@@ -237,11 +241,11 @@ jobs:
                       val filtrado = listaCategoriasAtualCompleta.filter{ it.lowercase().contains(lower) }
                       currentGruposKeys = filtrado
                       val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                      listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{"${it} (${mapa[it]?.size})"})
+                      listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, filtrado.map{"${it} (${mapa[it]?.size})"})
                       txtTituloLista.text="Busca: $query - ${filtrado.size} categorias"
                   } else {
                       val filtrado = listaCanaisAtualCompleta.filter{ it.nome.lowercase().contains(lower) || it.grupo.lowercase().contains(lower) }
-                      listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it.nome})
+                      listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, filtrado.map{it.nome})
                       txtTituloLista.text="Busca: $query - ${filtrado.size} resultados"
                   }
               }
@@ -414,7 +418,7 @@ jobs:
                   currentGruposKeys = if(order.isNotEmpty()) order else mapa.keys.toList()
                   listaCategoriasAtualCompleta = currentGruposKeys
                   txtTituloLista.text="Categorias - ${currentGruposKeys.size} (ordem original) - TUDO"
-                  listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
+                  listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
                   layoutPreview.visibility=View.GONE
@@ -427,7 +431,7 @@ jobs:
                   listaCanaisAtualCompleta = lista
                   currentGruposKeys = listOf(g)
                   txtTituloLista.text="$g - ${lista.size} canais (TUDO)"
-                  listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
+                  listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, lista.map{it.nome})
               }
               fun getCanaisAtuais(): List<Canal>{ return listaCanaisAtualCompleta }
               fun mostrarPreview(canal: Canal){
@@ -505,7 +509,7 @@ jobs:
                   currentGruposKeys=listOf("ID $deviceId","LIVE $lc TUDO","FILMES $mc TUDO","SERIES $sc TUDO","URL ${lastPlaylistUrl.take(50)}","Limpar e voltar")
                   listaCategoriasAtualCompleta=currentGruposKeys
                   txtTituloLista.text="Ajustes v31 FULL"
-                  listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
+                  listView.adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
                   layoutPreview.visibility=View.GONE
@@ -555,7 +559,7 @@ jobs:
                       <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias ordem original" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:background="#1A2A4A" android:padding="4dp" android:layout_marginTop="6dp">
-                      <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="🔍 Buscar canal, filme, serie..." android:textColor="#FFF" android:hintTextColor="#888" android:background="#0F2240" android:padding="8dp"/>
+                      <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="Buscar canal, filme, serie..." android:textColor="#FFF" android:hintTextColor="#888" android:background="#0F2240" android:padding="8dp"/>
                       <Button android:id="@+id/btnLimparBusca" android:layout_width="wrap_content" android:layout_height="40dp" android:text="X" android:layout_marginLeft="4dp"/>
                   </LinearLayout>
                   <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="6dp">
@@ -610,8 +614,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 31
-                  versionName "31.0-FULL-BUSCA-TUDO"
+                  versionCode 32
+                  versionName "32.0-FIX-BUSCA-FULL"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -647,9 +651,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v31 FULL BUSCA
+      - name: Build APK v32 FIX BUSCA
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v31-FULL-BUSCA-TUDO, path: "**/*.apk" }
+        with: { name: SuperPlay-v32-FIX-BUSCA-FULL, path: "**/*.apk" }
