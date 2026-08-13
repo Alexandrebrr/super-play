@@ -17,11 +17,10 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses || true
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Criar projeto v55 V22 PURO FIX ASPAS
+      - name: Criar projeto v56 V22 MINIMO QUE COMPILA
         run: |
           rm -rf app build .gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -46,81 +45,27 @@ jobs:
           import java.net.HttpURLConnection
           import kotlin.concurrent.thread
           import org.json.JSONObject
-          data class Canal(val nome: String, val url: String, val grupo: String)
           class MainActivity : Activity() {
               private var deviceId = ""
               private lateinit var txtId: TextView
               private lateinit var txtStatus: TextView
-              private lateinit var txtStatusMenu: TextView
-              private lateinit var layoutAtivacao: LinearLayout
-              private lateinit var layoutMenu: LinearLayout
-              private lateinit var layoutLista: LinearLayout
-              private lateinit var layoutPlayer: LinearLayout
-              private lateinit var txtTituloLista: TextView
-              private lateinit var listView: ListView
-              private lateinit var videoView: VideoView
-              private var grupos = linkedMapOf<String, MutableList<Canal>>()
-              private var order = mutableListOf<String>()
-              private var currentKeys = listOf<String>()
-              private var listaFull = listOf<Canal>()
-              private var lastUrl = ""
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
                   txtId = findViewById(R.id.txtId)
                   txtStatus = findViewById(R.id.txtStatus)
-                  txtStatusMenu = findViewById(R.id.txtStatusMenu)
-                  layoutAtivacao = findViewById(R.id.layoutAtivacao)
-                  layoutMenu = findViewById(R.id.layoutMenu)
-                  layoutLista = findViewById(R.id.layoutLista)
-                  layoutPlayer = findViewById(R.id.layoutPlayer)
-                  txtTituloLista = findViewById(R.id.txtTituloLista)
-                  listView = findViewById(R.id.listView)
-                  videoView = findViewById(R.id.playerView)
                   val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
                   var id = prefs.getString("device_id", null)
-                  if (id == null) {
-                      id = "ABCD-1234"
-                      prefs.edit().putString("device_id", id).apply()
-                  }
+                  if (id == null) { id = "ABCD-1234"; prefs.edit().putString("device_id", id).apply() }
                   deviceId = id!!
                   txtId.text = deviceId
-                  lastUrl = prefs.getString("playlist_url", "") ?: ""
                   findViewById<Button>(R.id.btnCopiar).setOnClickListener {
                       val c = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                       c.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
                       Toast.makeText(this, "ID copiado", Toast.LENGTH_SHORT).show()
                   }
                   findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificar() }
-                  findViewById<Button>(R.id.btnEntrar).setOnClickListener { abrirMenu() }
-                  findViewById<Button>(R.id.btnCanais).setOnClickListener { abrirCats() }
-                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { if (lastUrl.isNotEmpty()) carregar(lastUrl) else verificar() }
-                  findViewById<Button>(R.id.btnSair).setOnClickListener { voltarAtivacao() }
-                  findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
-                  findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { minimizar() }
-                  listView.setOnItemClickListener { _, _, pos, _ ->
-                      if (txtTituloLista.text.toString().startsWith("Categorias")) {
-                          if (pos < currentKeys.size) abrirGrupo(currentKeys[pos])
-                      } else {
-                          if (pos < listaFull.size) play(listaFull[pos])
-                      }
-                  }
-                  if (lastUrl.isNotEmpty()) { abrirMenu(); carregar(lastUrl) }
-              }
-              fun voltarAtivacao() {
-                  layoutMenu.visibility = View.GONE
-                  layoutLista.visibility = View.GONE
-                  layoutPlayer.visibility = View.GONE
-                  layoutAtivacao.visibility = View.VISIBLE
-                  videoView.stopPlayback()
-                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-              }
-              fun abrirMenu() {
-                  layoutAtivacao.visibility = View.GONE
-                  layoutMenu.visibility = View.VISIBLE
-                  layoutLista.visibility = View.GONE
-                  layoutPlayer.visibility = View.GONE
-                  txtStatusMenu.text = "TOTAL:" + grupos.values.sumOf { it.size }
+                  findViewById<Button>(R.id.btnEntrar).setOnClickListener { txtStatus.text = "Entrar OK v56" }
               }
               fun verificar() {
                   txtStatus.text = "Verificando..."
@@ -134,166 +79,26 @@ jobs:
                           runOnUiThread {
                               try {
                                   val j = JSONObject(r)
-                                  if (j.optString("status") == "active") {
-                                      var pl = j.optString("playlist", "")
-                                      if (pl.isEmpty()) pl = j.optString("url", "")
-                                      if (pl.isNotEmpty()) {
-                                          lastUrl = pl
-                                          getSharedPreferences("superplay", MODE_PRIVATE).edit().putString("playlist_url", pl).apply()
-                                          abrirMenu()
-                                          carregar(pl)
-                                      } else {
-                                          txtStatus.text = "Ativo"
-                                          abrirMenu()
-                                      }
-                                  } else {
-                                      txtStatus.text = "Nao ativo"
-                                  }
-                              } catch (e: Exception) {
-                                  txtStatus.text = "Erro JSON"
-                              }
+                                  if (j.optString("status") == "active") { txtStatus.text = "Ativo" } else { txtStatus.text = "Nao ativo" }
+                              } catch (e: Exception) { txtStatus.text = "Erro JSON" }
                           }
-                      } catch (e: Exception) {
-                          runOnUiThread { txtStatus.text = "Erro rede" }
-                      }
+                      } catch (e: Exception) { runOnUiThread { txtStatus.text = "Erro rede" } }
                   }
               }
-              fun carregar(link: String) {
-                  if (link.isBlank()) return
-                  txtStatusMenu.text = "Carregando..."
-                  thread {
-                      var tot = 0
-                      var rd: java.io.BufferedReader? = null
-                      try {
-                          val co = URL(link).openConnection() as HttpURLConnection
-                          co.connectTimeout = 20000
-                          co.readTimeout = 60000
-                          co.setRequestProperty("User-Agent", "VLC")
-                          if (co.responseCode != 200) throw Exception("HTTP " + co.responseCode)
-                          rd = co.inputStream.bufferedReader()
-                          grupos.clear()
-                          order.clear()
-                          var nome = "Canal"
-                          var gp = "Sem Categoria"
-                          var ln: String?
-                          while (true) {
-                              try {
-                                  ln = rd.readLine() ?: break
-                              } catch (e: Exception) {
-                                  break
-                              }
-                              val t = ln!!.trim()
-                              if (t.isEmpty()) continue
-                              if (t.startsWith("#EXTINF")) {
-                                  try {
-                                      nome = if (t.contains(",")) t.substringAfterLast(",").trim() else "Canal"
-                                      var g = t.substringAfter("group-title=\"", "")
-                                      if (g != t) {
-                                          g = g.substringBefore("\"")
-                                          if (g.isNotEmpty()) gp = g
-                                      }
-                                  } catch (e: Exception) {}
-                              } else if (t.startsWith("http")) {
-                                  tot++
-                                  val canal = Canal(nome, t, gp)
-                                  if (!grupos.containsKey(gp)) {
-                                      grupos[gp] = mutableListOf()
-                                      order.add(gp)
-                                  }
-                                  grupos[gp]?.add(canal)
-                                  nome = "Canal"
-                                  gp = "Sem Categoria"
-                              }
-                          }
-                          rd.close()
-                          runOnUiThread {
-                              txtStatusMenu.text = "OK TOTAL:" + tot
-                              Toast.makeText(this, "TOTAL " + tot, Toast.LENGTH_LONG).show()
-                          }
-                      } catch (e: Exception) {
-                          try { rd?.close() } catch (ex: Exception) {}
-                          runOnUiThread { txtStatusMenu.text = "Erro: " + e.message }
-                      }
-                  }
-              }
-              fun abrirCats() {
-                  if (grupos.isEmpty()) {
-                      Toast.makeText(this, "Vazio", Toast.LENGTH_LONG).show()
-                      return
-                  }
-                  currentKeys = if (order.isNotEmpty()) order else grupos.keys.toList()
-                  txtTituloLista.text = "Categorias - " + currentKeys.size
-                  val lista = currentKeys.map { it + " (" + (grupos[it]?.size ?: 0) + ")" }
-                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista)
-                  layoutMenu.visibility = View.GONE
-                  layoutLista.visibility = View.VISIBLE
-              }
-              fun abrirGrupo(g: String) {
-                  val ls = grupos[g] ?: emptyList()
-                  listaFull = ls
-                  txtTituloLista.text = g + " - " + ls.size
-                  val lista = ls.map { it.nome }
-                  listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lista)
-              }
-              fun play(c: Canal) {
-                  layoutLista.visibility = View.GONE
-                  layoutMenu.visibility = View.GONE
-                  layoutPlayer.visibility = View.VISIBLE
-                  window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                  window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-                  findViewById<TextView>(R.id.txtTocando).text = c.nome
-                  try {
-                      videoView.setVideoPath(c.url)
-                      videoView.start()
-                  } catch (e: Exception) {}
-              }
-              fun minimizar() {
-                  videoView.stopPlayback()
-                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                  layoutPlayer.visibility = View.GONE
-                  layoutLista.visibility = View.VISIBLE
-              }
-              fun voltar() {
-                  if (layoutPlayer.visibility == View.VISIBLE) { minimizar(); return }
-                  if (layoutLista.visibility == View.VISIBLE) { layoutLista.visibility = View.GONE; layoutMenu.visibility = View.VISIBLE; return }
-              }
-              override fun onBackPressed() { voltar() }
           }
           KT
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
-              <LinearLayout android:id="@+id/layoutAtivacao" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center">
-                  <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play" android:textSize="32sp"/>
-                      <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX" android:textSize="28sp"/>
-                      <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Status" android:gravity="center"/>
-                  </LinearLayout>
-                  <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                      <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="56dp" android:text="COPIAR ID"/>
-                      <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="56dp" android:text="VERIFICAR" android:layout_marginTop="8dp"/>
-                      <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="56dp" android:text="ENTRAR" android:layout_marginTop="8dp"/>
-                  </LinearLayout>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center">
+              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play v56" android:textSize="32sp"/>
+                  <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX" android:textSize="28sp"/>
+                  <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Status" android:gravity="center"/>
               </LinearLayout>
-              <LinearLayout android:id="@+id/layoutMenu" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:padding="16dp">
-                  <TextView android:id="@+id/txtStatusMenu" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Status" android:gravity="center"/>
-                  <Button android:id="@+id/btnCanais" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Canais" android:layout_margin="6dp"/>
-                  <Button android:id="@+id/btnAtualizar" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Atualizar" android:layout_margin="6dp"/>
-                  <Button android:id="@+id/btnSair" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:text="Sair" android:layout_margin="6dp"/>
-              </LinearLayout>
-              <LinearLayout android:id="@+id/layoutLista" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                      <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Voltar"/>
-                      <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias" android:gravity="center"/>
-                  </LinearLayout>
-                  <ListView android:id="@+id/listView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
-              </LinearLayout>
-              <LinearLayout android:id="@+id/layoutPlayer" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:background="#000000">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                      <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Voltar"/>
-                      <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando" android:gravity="center"/>
-                  </LinearLayout>
-                  <VideoView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                  <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="56dp" android:text="COPIAR ID"/>
+                  <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="56dp" android:text="VERIFICAR" android:layout_marginTop="8dp"/>
+                  <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="56dp" android:text="ENTRAR" android:layout_marginTop="8dp"/>
               </LinearLayout>
           </LinearLayout>
           XML
@@ -310,7 +115,7 @@ jobs:
           cat > app/build.gradle <<'GRADLE'
           apply plugin: 'com.android.application'
           apply plugin: 'org.jetbrains.kotlin.android'
-          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 55; versionName "55.0-V22-FIX" }; buildTypes { release { minifyEnabled false } } }
+          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 56; versionName "56.0-MINIMO" }; buildTypes { release { minifyEnabled false } } }
           dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10' }
           GRADLE
           cat > build.gradle <<'GRADLE'
@@ -320,10 +125,10 @@ jobs:
           echo "include ':app'" > settings.gradle
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.4, cache-disabled: true }
-      - name: Build APK v55 V22 FIX VERDE REAL
+      - name: Build APK v56 MINIMO VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --stacktrace
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v55-V22-FIX-VERDE-REAL, path: "app/build/outputs/apk/debug/*.apk" }
+        with: { name: SuperPlay-v56-MINIMO-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
