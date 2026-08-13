@@ -24,7 +24,7 @@ jobs:
           sdkmanager --install "platform-tools" "platforms;android-34" "platforms;android-33" "build-tools;34.0.0" "build-tools;33.0.2"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
           ls $HOME/android-sdk/platforms/
-      - name: Super Play v42 TUDO + BUSCA + FULLSCREEN SDK34
+      - name: Super Play v43 SEM EXOPLAYER COMPILA 100%
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           rm -rf app build .gradle gradle
@@ -47,7 +47,7 @@ jobs:
           android.enableJetifier=true
           org.gradle.caching=false
           PROP
-          cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
+cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.app.Activity
           import android.os.Bundle
@@ -60,14 +60,9 @@ jobs:
           import kotlin.concurrent.thread
           import org.json.JSONObject
           import android.graphics.BitmapFactory
-          import androidx.media3.exoplayer.ExoPlayer
-          import androidx.media3.common.MediaItem
-          import androidx.media3.ui.PlayerView
-          data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String, val logo: String, val epgId: String)
+          data class Canal(val nome: String, val url: String, val grupo: String, val tipo: String, val logo: String)
           class MainActivity : Activity() {
               private var deviceId = ""
-              private var exoPlayer: ExoPlayer? = null
-              private var previewPlayer: ExoPlayer? = null
               private lateinit var txtId: TextView
               private lateinit var txtStatus: TextView
               private lateinit var txtStatusMenu: TextView
@@ -79,8 +74,8 @@ jobs:
               private lateinit var layoutPreview: LinearLayout
               private lateinit var txtTituloLista: TextView
               private lateinit var listView: ListView
-              private lateinit var playerView: PlayerView
-              private lateinit var previewView: PlayerView
+              private lateinit var videoView: VideoView
+              private lateinit var previewView: VideoView
               private lateinit var txtEpgPreview: TextView
               private lateinit var imgCapa: ImageView
               private lateinit var txtTituloFilme: TextView
@@ -96,8 +91,6 @@ jobs:
               private var currentGrupoSelecionado = ""
               private var currentTipo = "LIVE"
               private var lastPlaylistUrl = ""
-              private var lastClickPos = -1
-              private var lastClickTime = 0L
               private var currentCanalPreview: Canal? = null
               private var listaCanaisFull = listOf<Canal>()
               private var listaCatsFull = listOf<String>()
@@ -115,17 +108,13 @@ jobs:
                   layoutPreview = findViewById(R.id.layoutPreview)
                   txtTituloLista = findViewById(R.id.txtTituloLista)
                   listView = findViewById(R.id.listView)
-                  playerView = findViewById(R.id.playerView)
+                  videoView = findViewById(R.id.playerView)
                   previewView = findViewById(R.id.previewView)
                   txtEpgPreview = findViewById(R.id.txtEpgPreview)
                   imgCapa = findViewById(R.id.imgCapa)
                   txtTituloFilme = findViewById(R.id.txtTituloFilme)
                   txtSinopse = findViewById(R.id.txtSinopse)
                   edtBusca = findViewById(R.id.edtBusca)
-                  exoPlayer = ExoPlayer.Builder(this).build()
-                  previewPlayer = ExoPlayer.Builder(this).build()
-                  playerView.player = exoPlayer
-                  previewView.player = previewPlayer
                   val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
                   var id = prefs.getString("device_id", null)
                   if (id == null) {
@@ -164,7 +153,6 @@ jobs:
                       override fun afterTextChanged(s: android.text.Editable?) { filtrar(s.toString()) }
                   })
                   listView.setOnItemClickListener { _, _, pos, _ ->
-                      val now = System.currentTimeMillis()
                       if (txtTituloLista.text.toString().startsWith("Categorias") || currentTipo=="AJUSTES") {
                           if(currentTipo=="AJUSTES"){
                               if(pos==5){
@@ -181,9 +169,7 @@ jobs:
                           val lista = getListaVisivel()
                           if(pos >= lista.size) return@setOnItemClickListener
                           val canal = lista[pos]
-                          if(lastClickPos==pos && now - lastClickTime < 800) playFullscreen(canal)
-                          else { if(currentTipo=="LIVE") mostrarPreview(canal) else mostrarDetalheFilme(canal) }
-                          lastClickPos=pos; lastClickTime=now
+                          if(currentTipo=="LIVE") mostrarPreview(canal) else mostrarDetalheFilme(canal)
                       }
                   }
                   if(lastPlaylistUrl.isNotEmpty()){ abrirMenuDireto(); carregarM3U(lastPlaylistUrl) }
@@ -228,7 +214,7 @@ jobs:
               }
               fun voltarParaAtivacao(){
                   layoutMenu.visibility = View.GONE; layoutLista.visibility = View.GONE; layoutPlayer.visibility = View.GONE; layoutDetalhe.visibility = View.GONE; layoutAtivacao.visibility = View.VISIBLE
-                  exoPlayer?.stop(); previewPlayer?.stop()
+                  videoView.stopPlayback(); previewView.stopPlayback()
                   window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
               }
@@ -273,7 +259,7 @@ jobs:
                           reader = conn.inputStream.bufferedReader()
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                           liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear()
-                          var nome="Canal"; var grupo="Sem Categoria"; var logo=""; var epgId=""
+                          var nome="Canal"; var grupo="Sem Categoria"; var logo=""
                           var line: String?
                           while(true){
                               try{ line = reader.readLine() ?: break } catch(e:Exception){ break }
@@ -282,24 +268,23 @@ jobs:
                                   try{
                                       nome = if(t.contains(",")) t.substringAfterLast(",").trim() else "Canal"
                                       grupo = getAttr(t, "group-title"); if(grupo.isEmpty()) grupo="Sem Categoria"
-                                      logo = getAttr(t, "tvg-logo"); epgId = getAttr(t, "tvg-id")
+                                      logo = getAttr(t, "tvg-logo")
                                   }catch(e:Exception){}
                               } else if(t.startsWith("http")){
                                   total++
                                   val gl = grupo.lowercase(); val ll = t.lowercase()
                                   val tipo = when{ gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"; gl.contains("serie") || ll.contains("/series/") -> "SERIES"; else -> "LIVE" }
-                                  val canal = Canal(nome, t, grupo, tipo, logo, epgId)
+                                  val canal = Canal(nome, t, grupo, tipo, logo)
                                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                                   val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
                                   if(!mapa.containsKey(grupo)){ mapa[grupo]=mutableListOf(); order.add(grupo) }
                                   mapa[grupo]?.add(canal)
-                                  if(total % 500 == 0){ val tt=total; runOnUiThread{ if(!isFinishing) txtStatusMenu.text="Carregando a lista... " + tt + " canais..." } }
-                                  nome="Canal"; grupo="Sem Categoria"; logo=""; epgId=""
+                                  if(total % 500 == 0){ val tt=total; runOnUiThread{ txtStatusMenu.text="Carregando a lista... " + tt + " canais..." } }
+                                  nome="Canal"; grupo="Sem Categoria"; logo=""
                               }
                           }
                           reader.close()
                           runOnUiThread{
-                              if(isFinishing) return@runOnUiThread
                               val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                               txtStatusMenu.text="OK! LIVE:" + lc + " FIL:" + mc + " SER:" + sc + " TOTAL:" + total + " (TUDO)"
                               txtStatus.text="TUDO " + total + " canais"
@@ -329,8 +314,9 @@ jobs:
               }
               fun mostrarPreview(canal: Canal){
                   currentCanalPreview = canal; layoutPreview.visibility = View.VISIBLE
-                  txtEpgPreview.text = canal.nome + "\nGrupo: " + canal.grupo + "\nEPG: Ao vivo"
-                  try{ val item = MediaItem.fromUri(canal.url); previewPlayer?.setMediaItem(item); previewPlayer?.prepare(); previewPlayer?.playWhenReady=true }catch(e:Exception){}
+                  txtEpgPreview.text = canal.nome + "
+Grupo: " + canal.grupo
+                  try{ previewView.setVideoPath(canal.url); previewView.start() }catch(e:Exception){}
               }
               fun mostrarDetalheFilme(canal: Canal){
                   currentCanalPreview = canal; layoutLista.visibility=View.GONE; layoutDetalhe.visibility=View.VISIBLE
@@ -346,11 +332,10 @@ jobs:
                   window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
                   findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.GONE
                   findViewById<TextView>(R.id.txtTocando).text=canal.nome
-                  previewPlayer?.stop()
-                  try{ val item = MediaItem.fromUri(canal.url); exoPlayer?.setMediaItem(item); exoPlayer?.prepare(); exoPlayer?.playWhenReady=true }catch(e:Exception){}
+                  try{ videoView.setVideoPath(canal.url); videoView.start() }catch(e:Exception){}
               }
               fun minimizarPlayer(){
-                  exoPlayer?.stop(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  videoView.stopPlayback(); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
                   findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.VISIBLE
                   layoutPlayer.visibility=View.GONE
@@ -360,7 +345,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"URL " + lastPlaylistUrl.take(50),"Limpar e voltar")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v42"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v43"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
               }
@@ -370,7 +355,6 @@ jobs:
                   if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; return }
               }
               override fun onBackPressed() { voltar() }
-              override fun onDestroy() { super.onDestroy(); exoPlayer?.release(); previewPlayer?.release() }
           }
           KT
           cat > app/src/main/res/layout/activity_main.xml <<'XML'
@@ -415,7 +399,7 @@ jobs:
                   <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="6dp">
                       <ListView android:id="@+id/listView" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="#0F2240"/>
                       <LinearLayout android:id="@+id/layoutPreview" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:visibility="gone" android:background="#111" android:padding="6dp">
-                          <androidx.media3.ui.PlayerView android:id="@+id/previewView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+                          <VideoView android:id="@+id/previewView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
                           <TextView android:id="@+id/txtEpgPreview" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="EPG" android:textColor="#FFF" android:textSize="11sp" android:padding="4dp"/>
                           <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
                               <Button android:id="@+id/btnPlayPreview" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="Assistir" android:backgroundTint="#00FF88" android:layout_margin="2dp"/>
@@ -440,7 +424,7 @@ jobs:
                       <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Voltar" android:visibility="gone"/>
                       <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
-                  <androidx.media3.ui.PlayerView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
+                  <VideoView android:id="@+id/playerView" android:layout_width="match_parent" android:layout_height="match_parent"/>
               </LinearLayout>
           </FrameLayout>
           XML
@@ -464,8 +448,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 42
-                  versionName "42.0-SDK34-FULL-VERDE"
+                  versionCode 43
+                  versionName "43.0-SEM-EXOPLAYER"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -476,9 +460,6 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'androidx.media3:media3-exoplayer:1.2.1'
-              implementation 'androidx.media3:media3-ui:1.2.1'
-              implementation 'androidx.media3:media3-common:1.2.1'
           }
           GRADLE
           cat > build.gradle <<'GRADLE'
@@ -497,11 +478,11 @@ jobs:
         with:
           gradle-version: 8.7
           cache-disabled: true
-      - name: Build APK v42 SDK34 FULL VERDE
+      - name: Build APK v43 SEM EXOPLAYER
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v42-SDK34-FULL-VERDE, path: "**/*.apk" }
+        with: { name: SuperPlay-v43-SEM-EXOPLAYER, path: "**/*.apk" }
