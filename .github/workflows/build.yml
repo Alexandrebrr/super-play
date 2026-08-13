@@ -4,12 +4,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Setup Android SDK Manual
+      - name: Setup Android SDK Manual SEM CACHE
         run: |
           sudo apt-get update -y
           sudo apt-get install -y wget unzip
@@ -23,14 +23,13 @@ jobs:
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses || true
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2" "platforms;android-34" "build-tools;34.0.0"
-          sdkmanager --list | tail -20
+          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-          ls -la $HOME/android-sdk/platforms/ || true
-      - name: Super Play v39 MANUAL SDK v28 VERDE
+          ls $HOME/android-sdk/platforms/
+      - name: Super Play v40 SEM CACHE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.2
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
@@ -44,13 +43,12 @@ jobs:
           </vector>
           XML
           cat > app/src/main/res/drawable/bg_space.xml <<'XML'
-          <shape xmlns:android="http://schemas.android.com/apk/res/android">
-            <gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/>
-          </shape>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"><gradient android:angle="135" android:startColor="#070F2A" android:endColor="#0A1931" android:type="linear"/></shape>
           XML
           cat > gradle.properties <<'PROP'
           android.useAndroidX=true
           android.enableJetifier=true
+          org.gradle.caching=false
           PROP
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
@@ -154,9 +152,7 @@ jobs:
                   findViewById<Button>(R.id.btnFilmes).setOnClickListener { abrirCategorias("MOVIES") }
                   findViewById<Button>(R.id.btnSeries).setOnClickListener { abrirCategorias("SERIES") }
                   findViewById<Button>(R.id.btnAjustes).setOnClickListener { abrirAjustes() }
-                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener {
-                      if(lastPlaylistUrl.isNotEmpty()) carregarM3U(lastPlaylistUrl) else verificarAtivacao()
-                  }
+                  findViewById<Button>(R.id.btnAtualizar).setOnClickListener { if(lastPlaylistUrl.isNotEmpty()) carregarM3U(lastPlaylistUrl) else verificarAtivacao() }
                   findViewById<Button>(R.id.btnSair).setOnClickListener { voltarParaAtivacao() }
                   findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
                   findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { minimizarPlayer() }
@@ -367,7 +363,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"URL " + lastPlaylistUrl.take(50),"Limpar e voltar")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v39"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v40"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
               }
@@ -471,8 +467,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 33
-                  versionCode 39
-                  versionName "39.0-MANUAL-SDK-FULL"
+                  versionCode 40
+                  versionName "40.0-SEM-CACHE-FULL"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -500,15 +496,11 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
           echo "include ':app'" > settings.gradle
-      - name: Setup Gradle 8.2
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.2
-      - name: Build APK v39 MANUAL SDK
+      - name: Build APK v40 SEM CACHE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.2
-          gradle assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace || gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v39-MANUAL-SDK-FULL, path: "**/*.apk" }
+        with: { name: SuperPlay-v40-SEM-CACHE-FULL, path: "**/*.apk" }
