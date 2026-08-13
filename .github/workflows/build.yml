@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v35 FIX SDK 34
+      - name: Super Play v36 COMPILE SDK 33 STABLE
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -415,13 +415,13 @@ jobs:
           apply plugin: 'org.jetbrains.kotlin.android'
           android {
               namespace 'com.superplay.app'
-              compileSdk 34
+              compileSdk 33
               defaultConfig {
                   applicationId "com.superplay.app"
                   minSdk 24
-                  targetSdk 34
-                  versionCode 35
-                  versionName "35.0-FIX-SDK"
+                  targetSdk 33
+                  versionCode 36
+                  versionName "36.0-SDK33-STABLE"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -454,15 +454,15 @@ jobs:
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
         with:
-          api-level: 34
-          build-tools: 34.0.0
+          api-level: 33
+          build-tools: 33.0.1
       - name: Setup Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v35 FIX SDK
+      - name: Build APK v36 SDK33 STABLE
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v35-FIX-SDK, path: "**/*.apk" }
+        with: { name: SuperPlay-v36-SDK33-STABLE, path: "**/*.apk" }
