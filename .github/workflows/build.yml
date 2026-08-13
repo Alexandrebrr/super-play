@@ -9,27 +9,23 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-      - name: Setup Android SDK Manual SEM CACHE
+      - name: Setup Android SDK Manual
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y wget unzip
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
           unzip -q tools.zip
           mv cmdline-tools latest
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           yes | sdkmanager --licenses || true
           sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-          ls $HOME/android-sdk/platforms/
-      - name: Super Play v40 SEM CACHE
+      - name: Super Play v41 TUDO + BUSCA + FULLSCREEN
         run: |
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.2
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
           mkdir -p app/src/main/res/layout
@@ -363,7 +359,7 @@ jobs:
                   currentTipo="AJUSTES"; edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}; val mc = moviesGrupos.values.sumOf{it.size}; val sc = seriesGrupos.values.sumOf{it.size}
                   currentGruposKeys=listOf("ID " + deviceId,"LIVE " + lc,"FILMES " + mc,"SERIES " + sc,"URL " + lastPlaylistUrl.take(50),"Limpar e voltar")
-                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v40"
+                  listaCatsFull=currentGruposKeys; txtTituloLista.text="Ajustes v41"
                   listView.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE
               }
@@ -467,8 +463,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 33
-                  versionCode 40
-                  versionName "40.0-SEM-CACHE-FULL"
+                  versionCode 41
+                  versionName "41.0-FULL-BUSCA-VERDE"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -496,11 +492,15 @@ jobs:
           allprojects { repositories { google(); mavenCentral() } }
           GRADLE
           echo "include ':app'" > settings.gradle
-      - name: Build APK v40 SEM CACHE
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+          cache-disabled: true
+      - name: Build APK v41 FULL BUSCA VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/33.0.2
-          ./gradlew assembleDebug --no-daemon --no-configuration-cache --stacktrace || gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
+          gradle assembleDebug --no-daemon --no-configuration-cache --stacktrace
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v40-SEM-CACHE-FULL, path: "**/*.apk" }
+        with: { name: SuperPlay-v41-FULL-BUSCA-VERDE, path: "**/*.apk" }
