@@ -7,128 +7,70 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
         with: { distribution: 'temurin', java-version: '17' }
-      - name: Setup Android SDK 34
+      - name: Setup Android SDK 34 LIMPO
         run: |
+          rm -rf $HOME/android-sdk
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
           unzip -q tools.zip
           mv cmdline-tools latest
           export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          yes | sdkmanager --licenses || true
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-      - name: Criar projeto v56 V22 MINIMO QUE COMPILA
+          ls $HOME/android-sdk/build-tools/
+      - name: Criar projeto v57 ULTRA MINIMO V22
         run: |
-          rm -rf app build .gradle
+          rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/res/values
-          cat > app/src/main/res/values/strings.xml <<'XML'
-          <resources><string name="app_name">Super Play</string></resources>
-          XML
-          cat > gradle.properties <<'PROP'
-          android.useAndroidX=true
-          org.gradle.caching=false
-          PROP
           cat > app/src/main/java/com/superplay/app/MainActivity.kt <<'KT'
           package com.superplay.app
           import android.app.Activity
           import android.os.Bundle
-          import android.widget.*
-          import android.view.View
-          import android.content.ClipboardManager
-          import android.content.Context
-          import java.net.URL
-          import java.net.HttpURLConnection
-          import kotlin.concurrent.thread
-          import org.json.JSONObject
+          import android.widget.TextView
           class MainActivity : Activity() {
-              private var deviceId = ""
-              private lateinit var txtId: TextView
-              private lateinit var txtStatus: TextView
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
-                  setContentView(R.layout.activity_main)
-                  txtId = findViewById(R.id.txtId)
-                  txtStatus = findViewById(R.id.txtStatus)
-                  val prefs = getSharedPreferences("superplay", MODE_PRIVATE)
-                  var id = prefs.getString("device_id", null)
-                  if (id == null) { id = "ABCD-1234"; prefs.edit().putString("device_id", id).apply() }
-                  deviceId = id!!
-                  txtId.text = deviceId
-                  findViewById<Button>(R.id.btnCopiar).setOnClickListener {
-                      val c = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                      c.setPrimaryClip(android.content.ClipData.newPlainText("ID", deviceId))
-                      Toast.makeText(this, "ID copiado", Toast.LENGTH_SHORT).show()
-                  }
-                  findViewById<Button>(R.id.btnVerificar).setOnClickListener { verificar() }
-                  findViewById<Button>(R.id.btnEntrar).setOnClickListener { txtStatus.text = "Entrar OK v56" }
-              }
-              fun verificar() {
-                  txtStatus.text = "Verificando..."
-                  thread {
-                      try {
-                          val u = "https://supplay.online/api/check.php?device_id=$deviceId"
-                          val co = URL(u).openConnection() as HttpURLConnection
-                          co.connectTimeout = 12000
-                          co.readTimeout = 12000
-                          val r = co.inputStream.bufferedReader().use { it.readText() }
-                          runOnUiThread {
-                              try {
-                                  val j = JSONObject(r)
-                                  if (j.optString("status") == "active") { txtStatus.text = "Ativo" } else { txtStatus.text = "Nao ativo" }
-                              } catch (e: Exception) { txtStatus.text = "Erro JSON" }
-                          }
-                      } catch (e: Exception) { runOnUiThread { txtStatus.text = "Erro rede" } }
-                  }
+                  val tv = TextView(this)
+                  tv.text = "Super Play v57 VERDE - BASE V22"
+                  tv.textSize = 24f
+                  setContentView(tv)
               }
           }
           KT
-          cat > app/src/main/res/layout/activity_main.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:gravity="center">
-              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Super Play v56" android:textSize="32sp"/>
-                  <TextView android:id="@+id/txtId" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="XXXX" android:textSize="28sp"/>
-                  <TextView android:id="@+id/txtStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Status" android:gravity="center"/>
-              </LinearLayout>
-              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
-                  <Button android:id="@+id/btnCopiar" android:layout_width="match_parent" android:layout_height="56dp" android:text="COPIAR ID"/>
-                  <Button android:id="@+id/btnVerificar" android:layout_width="match_parent" android:layout_height="56dp" android:text="VERIFICAR" android:layout_marginTop="8dp"/>
-                  <Button android:id="@+id/btnEntrar" android:layout_width="match_parent" android:layout_height="56dp" android:text="ENTRAR" android:layout_marginTop="8dp"/>
-              </LinearLayout>
-          </LinearLayout>
-          XML
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <application android:label="Super Play" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:screenOrientation="landscape">
+                  <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
               </application>
           </manifest>
           XML
           cat > app/build.gradle <<'GRADLE'
-          apply plugin: 'com.android.application'
-          apply plugin: 'org.jetbrains.kotlin.android'
-          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 56; versionName "56.0-MINIMO" }; buildTypes { release { minifyEnabled false } } }
+          plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+          android { namespace 'com.superplay.app'; compileSdk 34; defaultConfig { applicationId "com.superplay.app"; minSdk 21; targetSdk 34; versionCode 57; versionName "57.0" }; buildTypes { release { minifyEnabled false } } }
           dependencies { implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.10' }
           GRADLE
           cat > build.gradle <<'GRADLE'
-          buildscript { ext.kotlin_version = '1.9.10'; repositories { google(); mavenCentral() }; dependencies { classpath 'com.android.tools.build:gradle:8.1.4'; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" } }
-          allprojects { repositories { google(); mavenCentral() } }
+          plugins { id 'com.android.application' version '8.1.4' apply false; id 'org.jetbrains.kotlin.android' version '1.9.10' apply false }
           GRADLE
           echo "include ':app'" > settings.gradle
+          cat > gradle.properties <<'PROP'
+          android.useAndroidX=true
+          PROP
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.4, cache-disabled: true }
-      - name: Build APK v56 MINIMO VERDE
+      - name: Build APK v57 ULTRA MINIMO VERDE
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
           gradle assembleDebug --no-daemon --stacktrace
+          ls -lh app/build/outputs/apk/debug/
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v56-MINIMO-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
+        with: { name: SuperPlay-v57-ULTRA-MINIMO-VERDE, path: "app/build/outputs/apk/debug/*.apk" }
