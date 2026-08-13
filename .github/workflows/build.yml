@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Super Play v28 PREMIUM FIX YAML
+      - name: Super Play v31 FULL BUSCA TUDO
         run: |
           rm -rf app build .gradle gradle
           mkdir -p app/src/main/java/com/superplay/app
@@ -41,6 +41,8 @@ jobs:
           import kotlin.concurrent.thread
           import org.json.JSONObject
           import android.graphics.BitmapFactory
+          import android.text.Editable
+          import android.text.TextWatcher
           import androidx.media3.exoplayer.ExoPlayer
           import androidx.media3.common.MediaItem
           import androidx.media3.ui.PlayerView
@@ -66,6 +68,7 @@ jobs:
               private lateinit var imgCapa: ImageView
               private lateinit var txtTituloFilme: TextView
               private lateinit var txtSinopse: TextView
+              private lateinit var edtBusca: EditText
               private var liveGrupos = linkedMapOf<String, MutableList<Canal>>()
               private var moviesGrupos = linkedMapOf<String, MutableList<Canal>>()
               private var seriesGrupos = linkedMapOf<String, MutableList<Canal>>()
@@ -79,6 +82,8 @@ jobs:
               private var lastClickPos = -1
               private var lastClickTime = 0L
               private var currentCanalPreview: Canal? = null
+              private var listaCanaisAtualCompleta = listOf<Canal>()
+              private var listaCategoriasAtualCompleta = listOf<String>()
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
@@ -99,6 +104,7 @@ jobs:
                   imgCapa = findViewById(R.id.imgCapa)
                   txtTituloFilme = findViewById(R.id.txtTituloFilme)
                   txtSinopse = findViewById(R.id.txtSinopse)
+                  edtBusca = findViewById(R.id.edtBusca)
                   exoPlayer = ExoPlayer.Builder(this).build()
                   previewPlayer = ExoPlayer.Builder(this).build()
                   playerView.player = exoPlayer
@@ -133,22 +139,35 @@ jobs:
                   findViewById<Button>(R.id.btnVoltarLista).setOnClickListener { voltar() }
                   findViewById<Button>(R.id.btnVoltarPlayer).setOnClickListener { minimizarPlayer() }
                   findViewById<Button>(R.id.btnVoltarDetalhe).setOnClickListener { layoutDetalhe.visibility=View.GONE; layoutLista.visibility=View.VISIBLE }
-                  findViewById<Button>(R.id.btnPlayFilme).setOnClickListener {
-                      currentCanalPreview?.let { playFullscreen(it) }
-                  }
-                  findViewById<Button>(R.id.btnTelaCheia).setOnClickListener {
-                      currentCanalPreview?.let { playFullscreen(it) }
-                  }
-                  findViewById<Button>(R.id.btnPlayPreview).setOnClickListener {
-                      currentCanalPreview?.let { playFullscreen(it) }
-                  }
-                  // clique no player fullscreen mostra/esconde voltar
-                  playerView.setOnClickListener {
-                      val btn = findViewById<Button>(R.id.btnVoltarPlayer)
-                      if(btn.visibility==View.VISIBLE) btn.visibility=View.GONE else {
-                          btn.visibility=View.VISIBLE
-                          btn.postDelayed({ btn.visibility=View.GONE }, 3000)
+                  findViewById<Button>(R.id.btnPlayFilme).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
+                  findViewById<Button>(R.id.btnTelaCheia).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
+                  findViewById<Button>(R.id.btnPlayPreview).setOnClickListener { currentCanalPreview?.let { playFullscreen(it) } }
+                  // busca
+                  edtBusca.addTextChangedListener(object: TextWatcher{
+                      override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                      override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                      override fun afterTextChanged(s: Editable?) {
+                          val q = s.toString().trim()
+                          filtrarBusca(q)
                       }
+                  })
+                  findViewById<Button>(R.id.btnLimparBusca).setOnClickListener { edtBusca.setText("") }
+                  playerView.setOnClickListener {
+                      val top = findViewById<LinearLayout>(R.id.topBarPlayer)
+                      if(top.visibility==View.VISIBLE){
+                          top.visibility=View.GONE
+                          findViewById<Button>(R.id.btnVoltarPlayer).visibility=View.GONE
+                      } else {
+                          top.visibility=View.VISIBLE
+                          findViewById<Button>(R.id.btnVoltarPlayer).visibility=View.VISIBLE
+                          top.postDelayed({
+                              if(layoutPlayer.visibility==View.VISIBLE){
+                                  top.visibility=View.GONE
+                                  findViewById<Button>(R.id.btnVoltarPlayer).visibility=View.GONE
+                              }
+                          }, 3000)
+                      }
+                      window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
                   }
                   listView.setOnItemClickListener { _, _, pos, _ ->
                       val now = System.currentTimeMillis()
@@ -165,18 +184,13 @@ jobs:
                           }
                           if(pos < currentGruposKeys.size) abrirCanaisDoGrupo(currentGruposKeys[pos])
                       } else {
-                          val lista = getCanaisAtuais()
+                          val lista = getCanaisAtuaisVisiveis()
                           if(pos >= lista.size) return@setOnItemClickListener
                           val canal = lista[pos]
-                          // duplo clique abre fullscreen
                           if(lastClickPos==pos && now - lastClickTime < 800){
                               playFullscreen(canal)
                           } else {
-                              if(currentTipo=="LIVE"){
-                                  mostrarPreview(canal)
-                              } else {
-                                  mostrarDetalheFilme(canal)
-                              }
+                              if(currentTipo=="LIVE") mostrarPreview(canal) else mostrarDetalheFilme(canal)
                           }
                           lastClickPos=pos
                           lastClickTime=now
@@ -198,14 +212,44 @@ jobs:
                       val end = line.indexOf(q, start)
                       if(end!=-1) return line.substring(start, end)
                   } else {
-                      val endSpace = line.indexOf(' ', start)
-                      val endComma = line.indexOf(',', start)
-                      var end = line.length
-                      if(endSpace!=-1 && endSpace < end) end = endSpace
-                      if(endComma!=-1 && endComma < end) end = endComma
+                      var end = line.indexOf(' ', start)
+                      if(end==-1) end=line.length
                       return line.substring(start, end)
                   }
                   return ""
+              }
+              fun filtrarBusca(query: String){
+                  if(query.isEmpty()){
+                      if(txtTituloLista.text.toString().startsWith("Categorias")){
+                          currentGruposKeys = listaCategoriasAtualCompleta
+                          val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                          listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
+                          txtTituloLista.text="Categorias - ${currentGruposKeys.size} (tudo)"
+                      } else {
+                          val lista = listaCanaisAtualCompleta
+                          listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
+                          txtTituloLista.text="$currentGrupoSelecionado - ${lista.size} (tudo)"
+                      }
+                      return
+                  }
+                  val lower = query.lowercase()
+                  if(txtTituloLista.text.toString().startsWith("Categorias")){
+                      val filtrado = listaCategoriasAtualCompleta.filter{ it.lowercase().contains(lower) }
+                      currentGruposKeys = filtrado
+                      val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                      listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{"${it} (${mapa[it]?.size})"})
+                      txtTituloLista.text="Busca: $query - ${filtrado.size} categorias"
+                  } else {
+                      val filtrado = listaCanaisAtualCompleta.filter{ it.nome.lowercase().contains(lower) || it.grupo.lowercase().contains(lower) }
+                      listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, filtrado.map{it.nome})
+                      txtTituloLista.text="Busca: $query - ${filtrado.size} resultados"
+                  }
+              }
+              fun getCanaisAtuaisVisiveis(): List<Canal>{
+                  val q = edtBusca.text.toString().trim()
+                  if(q.isEmpty()) return listaCanaisAtualCompleta
+                  val lower = q.lowercase()
+                  return listaCanaisAtualCompleta.filter{ it.nome.lowercase().contains(lower) }
               }
               fun voltarParaAtivacao(){
                   layoutMenu.visibility = View.GONE
@@ -215,6 +259,8 @@ jobs:
                   layoutAtivacao.visibility = View.VISIBLE
                   exoPlayer?.stop()
                   previewPlayer?.stop()
+                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
               }
               fun abrirMenuDireto(){
                   layoutAtivacao.visibility = View.GONE
@@ -256,70 +302,109 @@ jobs:
                   }
               }
               fun carregarM3U(link: String){
-                  txtStatusMenu.text = "Carregando a lista..."
-                  txtStatus.text = "Carregando a lista..."
+                  if(link.isBlank()){
+                      txtStatusMenu.text="Link vazio"
+                      return
+                  }
+                  txtStatusMenu.text = "Carregando a lista... aguarde"
+                  txtStatus.text = "Carregando a lista... aguarde"
                   thread{
+                      var total=0
+                      var reader: java.io.BufferedReader? = null
                       try{
                           val conn = URL(link).openConnection() as HttpURLConnection
-                          conn.connectTimeout=20000; conn.readTimeout=40000
-                          conn.setRequestProperty("User-Agent","VLC")
-                          val txt = conn.inputStream.bufferedReader().use{it.readText()}
+                          conn.connectTimeout=20000
+                          conn.readTimeout=60000
+                          conn.setRequestProperty("User-Agent","VLC/3.0.20 LibVLC")
+                          conn.instanceFollowRedirects=true
+                          conn.useCaches=false
+                          val code = conn.responseCode
+                          if(code!=200) throw Exception("HTTP $code")
+                          reader = conn.inputStream.bufferedReader()
                           liveGrupos.clear(); moviesGrupos.clear(); seriesGrupos.clear()
                           liveOrder.clear(); moviesOrder.clear(); seriesOrder.clear()
                           var nome="Canal"
                           var grupo="Sem Categoria"
                           var logo=""
                           var epgId=""
-                          var total=0
-                          for(raw in txt.lines()){
-                              val line=raw.trim()
-                              if(line.isEmpty()) continue
-                              if(line.startsWith("#EXTINF")){
-                                  nome = if(line.contains(",")) line.substringAfterLast(",").trim() else "Canal"
-                                  grupo = getAttr(line, "group-title")
-                                  if(grupo.isEmpty()) grupo="Sem Categoria"
-                                  logo = getAttr(line, "tvg-logo")
-                                  epgId = getAttr(line, "tvg-id")
-                                  if(epgId.isEmpty()) epgId = getAttr(line, "tvg-name")
-                              } else if(line.startsWith("http")){
-                                  total++
-                                  val gl = grupo.lowercase()
-                                  val ll = line.lowercase()
-                                  val tipo = when{
-                                      gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") -> "MOVIES"
-                                      gl.contains("serie") || ll.contains("/series/") -> "SERIES"
-                                      else -> "LIVE"
-                                  }
-                                  val canal = Canal(nome, line, grupo, tipo, logo, epgId)
-                                  val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                                  val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
-                                  if(!mapa.containsKey(grupo)){
-                                      mapa[grupo]=mutableListOf()
-                                      order.add(grupo)
-                                  }
-                                  mapa[grupo]?.add(canal)
-                                  nome="Canal"
-                                  grupo="Sem Categoria"
-                                  logo=""
-                                  epgId=""
+                          var line: String?
+                          while(true){
+                              try{ line = reader.readLine() ?: break } catch(e:Exception){ break }
+                              val trimmed = line!!.trim()
+                              if(trimmed.isEmpty()) continue
+                              if(trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.startsWith("<head")){
+                                  throw Exception("Link retornou HTML e nao M3U")
+                              }
+                              if(trimmed.startsWith("#EXTINF")){
+                                  try{
+                                      nome = if(trimmed.contains(",")) trimmed.substringAfterLast(",").trim() else "Canal"
+                                      if(nome.length>120) nome=nome.take(120)
+                                      grupo = getAttr(trimmed, "group-title")
+                                      if(grupo.isEmpty()) grupo="Sem Categoria"
+                                      if(grupo.length>80) grupo=grupo.take(80)
+                                      logo = getAttr(trimmed, "tvg-logo")
+                                      epgId = getAttr(trimmed, "tvg-id")
+                                      if(epgId.isEmpty()) epgId = getAttr(trimmed, "tvg-name")
+                                  } catch(e:Exception){ nome="Canal"; grupo="Sem Categoria"; logo=""; epgId="" }
+                              } else if(trimmed.startsWith("http://") || trimmed.startsWith("https://")){
+                                  try{
+                                      total++
+                                      val gl = grupo.lowercase()
+                                      val ll = trimmed.lowercase()
+                                      val tipo = when{
+                                          gl.contains("filme") || gl.contains("movie") || ll.contains("/movie/") || ll.contains("/filme/") -> "MOVIES"
+                                          gl.contains("serie") || ll.contains("/series/") || ll.contains("/serie/") -> "SERIES"
+                                          else -> "LIVE"
+                                      }
+                                      val canal = Canal(nome, trimmed, grupo, tipo, logo, epgId)
+                                      val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
+                                      val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
+                                      if(!mapa.containsKey(grupo)){
+                                          mapa[grupo]=mutableListOf()
+                                          order.add(grupo)
+                                      }
+                                      mapa[grupo]?.add(canal)
+                                      if(total % 500 == 0){
+                                          val t=total
+                                          runOnUiThread{ if(!isFinishing) txtStatusMenu.text="Carregando a lista... $t canais..." }
+                                      }
+                                  } catch(e:Exception){}
+                                  nome="Canal"; grupo="Sem Categoria"; logo=""; epgId=""
                               }
                           }
+                          reader.close()
                           runOnUiThread{
+                              if(isFinishing) return@runOnUiThread
                               val lc = liveGrupos.values.sumOf{it.size}
                               val mc = moviesGrupos.values.sumOf{it.size}
                               val sc = seriesGrupos.values.sumOf{it.size}
-                              txtStatusMenu.text="Carregando a lista... OK! LIVE:$lc FIL:$mc SER:$sc"
-                              txtStatus.text="Carregando a lista... $total canais"
-                              Toast.makeText(this, "Lista carregada $total canais", Toast.LENGTH_LONG).show()
+                              txtStatusMenu.text="Carregando a lista... OK! LIVE:$lc FIL:$mc SER:$sc TOTAL:$total"
+                              txtStatus.text="Lista carregada $total canais - TUDO"
+                              Toast.makeText(this, "TUDO carregado $total canais", Toast.LENGTH_LONG).show()
                               if(layoutAtivacao.visibility==View.VISIBLE) abrirMenuDireto()
                           }
-                      }catch(e:Exception){
-                          runOnUiThread{ txtStatusMenu.text="Erro ao carregar lista ${e.message}" }
+                      } catch(oom: OutOfMemoryError){
+                          try{ reader?.close() } catch(e:Exception){}
+                          runOnUiThread{
+                              if(!isFinishing){
+                                  txtStatusMenu.text="Lista muito grande mas carregou parcial"
+                                  Toast.makeText(this, "Lista grande, carregado parcial", Toast.LENGTH_LONG).show()
+                              }
+                          }
+                      } catch(e:Exception){
+                          try{ reader?.close() } catch(ex:Exception){}
+                          runOnUiThread{
+                              if(!isFinishing){
+                                  txtStatusMenu.text="Erro ao carregar lista: ${e.message}"
+                                  Toast.makeText(this, "Erro: ${e.message}", Toast.LENGTH_LONG).show()
+                              }
+                          }
                       }
                   }
               }
               fun abrirCategorias(tipo: String){
                   currentTipo=tipo
+                  edtBusca.setText("")
                   val mapa = when(tipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   val order = when(tipo){"MOVIES"->moviesOrder;"SERIES"->seriesOrder;else->liveOrder}
                   if(mapa.isEmpty()){
@@ -327,7 +412,8 @@ jobs:
                       return
                   }
                   currentGruposKeys = if(order.isNotEmpty()) order else mapa.keys.toList()
-                  txtTituloLista.text="Categorias - Ordem da lista (${mapa.size})"
+                  listaCategoriasAtualCompleta = currentGruposKeys
+                  txtTituloLista.text="Categorias - ${currentGruposKeys.size} (ordem original) - TUDO"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys.map{"${it} (${mapa[it]?.size})"})
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
@@ -335,22 +421,25 @@ jobs:
               }
               fun abrirCanaisDoGrupo(g: String){
                   currentGrupoSelecionado=g
+                  edtBusca.setText("")
                   val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
                   val lista=mapa[g]?: emptyList()
-                  txtTituloLista.text="$g - ${lista.size} (ordem original)"
+                  listaCanaisAtualCompleta = lista
+                  currentGruposKeys = listOf(g)
+                  txtTituloLista.text="$g - ${lista.size} canais (TUDO)"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, lista.map{it.nome})
               }
+              fun getCanaisAtuais(): List<Canal>{ return listaCanaisAtualCompleta }
               fun mostrarPreview(canal: Canal){
                   currentCanalPreview = canal
                   layoutPreview.visibility = View.VISIBLE
-                  txtEpgPreview.text = canal.nome + "\nGrupo: " + canal.grupo + "\nEPG: Agora ao vivo\nEm breve: Programacao normal"
+                  txtEpgPreview.text = canal.nome + "\nGrupo: " + canal.grupo + "\nEPG: Ao vivo"
                   try{
                       val item = MediaItem.fromUri(canal.url)
                       previewPlayer?.setMediaItem(item)
                       previewPlayer?.prepare()
                       previewPlayer?.playWhenReady=true
                   }catch(e:Exception){}
-                  Toast.makeText(this, "Preview ${canal.nome} - duplo clique para tela cheia", Toast.LENGTH_SHORT).show()
               }
               fun mostrarDetalheFilme(canal: Canal){
                   currentCanalPreview = canal
@@ -358,7 +447,6 @@ jobs:
                   layoutDetalhe.visibility=View.VISIBLE
                   txtTituloFilme.text = canal.nome
                   txtSinopse.text = "Sinopse PT: " + canal.nome + " - Dublado HD - Grupo " + canal.grupo
-                  // carrega capa
                   if(canal.logo.isNotEmpty()){
                       thread{
                           try{
@@ -366,17 +454,11 @@ jobs:
                               conn.connectTimeout=8000
                               val bmp = BitmapFactory.decodeStream(conn.inputStream)
                               runOnUiThread{ imgCapa.setImageBitmap(bmp) }
-                          }catch(e:Exception){
-                              runOnUiThread{ txtSinopse.append(" (Capa nao carregou)") }
-                          }
+                          }catch(e:Exception){}
                       }
                   } else {
                       imgCapa.setImageResource(android.R.drawable.ic_menu_gallery)
                   }
-              }
-              fun getCanaisAtuais(): List<Canal>{
-                  val mapa = when(currentTipo){"MOVIES"->moviesGrupos;"SERIES"->seriesGrupos;else->liveGrupos}
-                  return mapa[currentGrupoSelecionado]?: emptyList()
               }
               fun playFullscreen(canal: Canal){
                   currentCanalPreview = canal
@@ -385,6 +467,9 @@ jobs:
                   layoutMenu.visibility=View.GONE
                   layoutPreview.visibility=View.GONE
                   layoutPlayer.visibility=View.VISIBLE
+                  window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+                  findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.GONE
                   findViewById<TextView>(R.id.txtTocando).text=canal.nome
                   val btnVoltar = findViewById<Button>(R.id.btnVoltarPlayer)
                   btnVoltar.visibility=View.GONE
@@ -395,11 +480,12 @@ jobs:
                       exoPlayer?.prepare()
                       exoPlayer?.playWhenReady=true
                   }catch(e:Exception){}
-                  // esconde voltar apos 1s, mostra ao tocar
-                  btnVoltar.postDelayed({ if(layoutPlayer.visibility==View.VISIBLE) btnVoltar.visibility=View.GONE }, 2000)
               }
               fun minimizarPlayer(){
                   exoPlayer?.stop()
+                  window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                  findViewById<LinearLayout>(R.id.topBarPlayer).visibility=View.VISIBLE
                   layoutPlayer.visibility=View.GONE
                   if(currentTipo=="LIVE"){
                       layoutLista.visibility=View.VISIBLE
@@ -412,11 +498,13 @@ jobs:
               }
               fun abrirAjustes(){
                   currentTipo="AJUSTES"
+                  edtBusca.setText("")
                   val lc = liveGrupos.values.sumOf{it.size}
                   val mc = moviesGrupos.values.sumOf{it.size}
                   val sc = seriesGrupos.values.sumOf{it.size}
-                  currentGruposKeys=listOf("ID $deviceId","LIVE $lc ordem original","FILMES $mc","SERIES $sc","URL ${lastPlaylistUrl.take(50)}","Limpar e voltar")
-                  txtTituloLista.text="Ajustes v26 Premium"
+                  currentGruposKeys=listOf("ID $deviceId","LIVE $lc TUDO","FILMES $mc TUDO","SERIES $sc TUDO","URL ${lastPlaylistUrl.take(50)}","Limpar e voltar")
+                  listaCategoriasAtualCompleta=currentGruposKeys
+                  txtTituloLista.text="Ajustes v31 FULL"
                   listView.adapter=ArrayAdapter(this, android.R.layout.simple_list_item_1, currentGruposKeys)
                   layoutMenu.visibility=View.GONE
                   layoutLista.visibility=View.VISIBLE
@@ -425,7 +513,7 @@ jobs:
               fun voltar(){
                   if(layoutPlayer.visibility==View.VISIBLE){ minimizarPlayer(); return }
                   if(layoutDetalhe.visibility==View.VISIBLE){ layoutDetalhe.visibility=View.GONE; layoutLista.visibility=View.VISIBLE; return }
-                  if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE; return }
+                  if(layoutLista.visibility==View.VISIBLE){ layoutLista.visibility=View.GONE; layoutMenu.visibility=View.VISIBLE; layoutPreview.visibility=View.GONE; edtBusca.setText(""); return }
               }
               override fun onBackPressed() { if(layoutPlayer.visibility==View.VISIBLE || layoutLista.visibility==View.VISIBLE || layoutDetalhe.visibility==View.VISIBLE) voltar() else voltarParaAtivacao() }
               override fun onDestroy() { super.onDestroy(); exoPlayer?.release(); previewPlayer?.release() }
@@ -466,8 +554,12 @@ jobs:
                       <Button android:id="@+id/btnVoltarLista" android:layout_width="wrap_content" android:layout_height="36dp" android:text="Voltar"/>
                       <TextView android:id="@+id/txtTituloLista" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Categorias ordem original" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
-                      <ListView android:id="@+id/listView" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="#0F2240" android:layout_marginTop="8dp"/>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:background="#1A2A4A" android:padding="4dp" android:layout_marginTop="6dp">
+                      <EditText android:id="@+id/edtBusca" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:hint="🔍 Buscar canal, filme, serie..." android:textColor="#FFF" android:hintTextColor="#888" android:background="#0F2240" android:padding="8dp"/>
+                      <Button android:id="@+id/btnLimparBusca" android:layout_width="wrap_content" android:layout_height="40dp" android:text="X" android:layout_marginLeft="4dp"/>
+                  </LinearLayout>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:layout_marginTop="6dp">
+                      <ListView android:id="@+id/listView" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:background="#0F2240"/>
                       <LinearLayout android:id="@+id/layoutPreview" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:visibility="gone" android:background="#111" android:padding="6dp">
                           <androidx.media3.ui.PlayerView android:id="@+id/previewView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
                           <TextView android:id="@+id/txtEpgPreview" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="EPG" android:textColor="#FFF" android:textSize="11sp" android:padding="4dp"/>
@@ -475,7 +567,7 @@ jobs:
                               <Button android:id="@+id/btnPlayPreview" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="▶ Assistir" android:backgroundTint="#00FF88" android:layout_margin="2dp"/>
                               <Button android:id="@+id/btnTelaCheia" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="⛶ Tela Cheia" android:layout_margin="2dp"/>
                           </LinearLayout>
-                                                </LinearLayout>
+                      </LinearLayout>
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutDetalhe" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal" android:visibility="gone" android:background="#0A1931" android:padding="12dp">
@@ -490,7 +582,7 @@ jobs:
                   </LinearLayout>
               </LinearLayout>
               <LinearLayout android:id="@+id/layoutPlayer" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:visibility="gone" android:background="#000">
-                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
+                  <LinearLayout android:id="@+id/topBarPlayer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="6dp" android:background="#111">
                       <Button android:id="@+id/btnVoltarPlayer" android:layout_width="wrap_content" android:layout_height="32dp" android:text="Voltar" android:visibility="gone"/>
                       <TextView android:id="@+id/txtTocando" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Tocando" android:textColor="#FFF" android:gravity="center"/>
                   </LinearLayout>
@@ -501,7 +593,7 @@ jobs:
           cat > app/src/main/AndroidManifest.xml <<'XML'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <application android:allowBackup="true" android:label="Super Play" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:usesCleartextTraffic="true">
+              <application android:allowBackup="true" android:largeHeap="true" android:hardwareAccelerated="true" android:label="Super Play" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher" android:usesCleartextTraffic="true">
                   <activity android:name=".MainActivity" android:exported="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" android:screenOrientation="landscape">
                       <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
                   </activity>
@@ -518,8 +610,8 @@ jobs:
                   applicationId "com.superplay.app"
                   minSdk 24
                   targetSdk 34
-                  versionCode 28
-                  versionName "28.0-PREMIUM-FIX-YAML"
+                  versionCode 31
+                  versionName "31.0-FULL-BUSCA-TUDO"
               }
               buildTypes { release { minifyEnabled false } }
               compileOptions {
@@ -555,9 +647,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.2
-      - name: Build APK v28 PREMIUM FIX YAML
+      - name: Build APK v31 FULL BUSCA
         run: |
           gradle assembleDebug --stacktrace --no-daemon
           find . -name "*.apk" -type f -ls
       - uses: actions/upload-artifact@v4
-        with: { name: SuperPlay-v28-PREMIUM-FIX-YAML, path: "**/*.apk" }
+        with: { name: SuperPlay-v31-FULL-BUSCA-TUDO, path: "**/*.apk" }
